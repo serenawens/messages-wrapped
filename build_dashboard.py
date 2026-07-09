@@ -30,7 +30,9 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_DB_PATH = os.path.expanduser("~/Library/Messages/chat.db")
 CONTACTS_FILE = os.path.join(SCRIPT_DIR, "contacts.json")
 TEMPLATE_FILE = os.path.join(SCRIPT_DIR, "dashboard_template.html")
+LOOKUP_TEMPLATE_FILE = os.path.join(SCRIPT_DIR, "lookup_template.html")
 OUTPUT_FILE = os.path.join(SCRIPT_DIR, "iMessage_Dashboard.html")
+LOOKUP_OUTPUT_FILE = os.path.join(SCRIPT_DIR, "iMessage_Dashboard_Lookup.html")
 
 APPLE_EPOCH_OFFSET = 978307200  # seconds between 1970-01-01 and 2001-01-01
 
@@ -48,6 +50,99 @@ gonna wanna gotta kinda sorta u r ur thats whats hes shes theres
 """.split())
 
 TAPBACK_PREFIXES = ("Loved ", "Liked ", "Disliked ", "Laughed at ", "Emphasized ", "Questioned ")
+
+# Emoji detection — broad Unicode ranges covering all major emoji blocks
+EMOJI_RE = re.compile(
+    "[\U0001F300-\U0001F9FF"   # Misc symbols, emoticons, transport, supplemental
+    "\U0001FA00-\U0001FAFF"    # Chess, bubbles, etc.
+    "\U00002600-\U000027BF"    # Misc symbols + dingbats
+    "\U0001F1E0-\U0001F1FF"    # Regional indicator flags
+    "\U00002300-\U000023FF"    # Misc technical
+    "\U000025A0-\U000025FF"    # Geometric shapes
+    "]+",
+    flags=re.UNICODE,
+)
+
+GP_GAMES = {
+    "8ball": "8-Ball", "basketball": "Basketball", "basketballstar": "Basketball",
+    "mancala": "Mancala", "archery": "Archery", "minigolf": "Mini Golf",
+    "cup_pong": "Cup Pong", "soccer": "Soccer", "hockey": "Air Hockey",
+    "fourinarow": "Four in a Row", "shuffleboard": "Shuffleboard",
+    "boxing": "Boxing", "checkers": "Checkers", "go": "Go",
+    "knockout": "Knockout", "pool": "Pool", "putt": "Putt-Putt Golf",
+    "darts": "Darts", "spaceship": "Spaceship", "wordhunt": "Word Hunt",
+    "wordbrush": "Word Hunt", "anagram": "Anagram", "facerace": "Face Race",
+}
+
+
+def gp_game_name(bundle_id):
+    parts = (bundle_id or "").lower().split(".")
+    for i, p in enumerate(parts):
+        if p == "gamepigeon" and i + 1 < len(parts):
+            return GP_GAMES.get(parts[i + 1], parts[i + 1].replace("_", " ").title())
+    return "Game Pigeon"
+
+
+def _median(lst):
+    if not lst:
+        return None
+    s = sorted(lst)
+    n = len(s)
+    return int((s[n // 2 - 1] + s[n // 2]) / 2) if n % 2 == 0 else s[n // 2]
+
+
+def _response_buckets(gaps_ms):
+    """Percentage of responses within each time window."""
+    if not gaps_ms:
+        return {}
+    n = len(gaps_ms)
+    thresholds = [300_000, 1_800_000, 3_600_000, 21_600_000, 86_400_000]
+    keys = ["5m", "30m", "1h", "6h", "24h", "24h+"]
+    counts = [0] * 6
+    for g in gaps_ms:
+        placed = False
+        for i, t in enumerate(thresholds):
+            if g <= t:
+                counts[i] += 1
+                placed = True
+                break
+        if not placed:
+            counts[5] += 1
+    return {k: round(c / n * 100) for k, c in zip(keys, counts)}
+
+
+def _burst_responses(msgs_sorted):
+    """
+    Group consecutive messages from the same sender into bursts.
+    Measure response time from end of one burst to start of the next.
+    msgs_sorted: list of (ts_ms, is_from_me_bool)
+    Returns {your: [ms,...], their: [ms,...]}
+    """
+    if len(msgs_sorted) < 2:
+        return {"your": [], "their": []}
+    bursts = []
+    cur_sender, burst_start, burst_end = None, None, None
+    for ts, is_from_me in msgs_sorted:
+        s = "me" if is_from_me else "them"
+        if s != cur_sender:
+            if cur_sender is not None:
+                bursts.append({"s": cur_sender, "start": burst_start, "end": burst_end})
+            cur_sender, burst_start = s, ts
+        burst_end = ts
+    if cur_sender is not None:
+        bursts.append({"s": cur_sender, "start": burst_start, "end": burst_end})
+
+    your_gaps, their_gaps = [], []
+    for i in range(1, len(bursts)):
+        gap = bursts[i]["start"] - bursts[i - 1]["end"]
+        if gap <= 0 or gap > 48 * 3_600_000:
+            continue
+        (your_gaps if bursts[i]["s"] == "me" else their_gaps).append(gap)
+    return {"your": your_gaps, "their": their_gaps}
+
+
+def _avg(lst):
+    return round(sum(lst) / len(lst), 1) if lst else None
 
 
 def find_db_path():
@@ -168,10 +263,10 @@ def find_addressbook_dbs():
 
 def load_mac_contacts():
     """Best-effort read of the macOS Contacts app so handles can be
-    auto-labeled with real names. Returns (phone_lookup, email_lookup),
-    both possibly empty if Contacts data isn't present or readable --
-    callers should fall back to manual contacts.json entries either way."""
+    auto-labeled with real names. Returns (phone_lookup, email_lookup,
+    photos_by_pk), all possibly empty if Contacts data isn't present."""
     phone_lookup, email_lookup = {}, {}
+    photos_by_pk: dict = {}           # Z_PK -> base64-encoded JPEG
     dbs = find_addressbook_dbs()
 
     for db_path in dbs:
@@ -189,7 +284,7 @@ def load_mac_contacts():
             conn.row_factory = sqlite3.Row
             cur = conn.cursor()
 
-            names = {}
+            names: dict = {}
             for r in cur.execute(
                 "SELECT Z_PK as pk, ZFIRSTNAME as first, ZLASTNAME as last, "
                 "ZORGANIZATION as org FROM ZABCDRECORD"
@@ -208,14 +303,30 @@ def load_mac_contacts():
                 if name and r["addr"]:
                     email_lookup[r["addr"].lower()] = name
 
+            # Best-effort photo extraction — column names vary by macOS version
+            try:
+                cols = {row[1] for row in cur.execute("PRAGMA table_info(ZABCDRECORD)")}
+                photo_col = next(
+                    (c for c in ("ZTHUMBNAILIMAGEDATA", "ZIMAGEDATA", "ZTHUMBNAILIMAGE") if c in cols),
+                    None,
+                )
+                if photo_col:
+                    import base64
+                    for r in cur.execute(f"SELECT Z_PK, {photo_col} FROM ZABCDRECORD WHERE {photo_col} IS NOT NULL"):
+                        pk, data = r[0], r[1]
+                        if data and isinstance(data, (bytes, bytearray)) and len(data) < 500_000:
+                            photos_by_pk[pk] = base64.b64encode(data).decode()
+            except Exception:
+                pass  # photos are optional
+
             conn.close()
         except Exception:
-            pass  # best-effort -- an unreadable/missing source just contributes nothing
+            pass  # best-effort
         finally:
             if tmp_dir:
                 shutil.rmtree(tmp_dir, ignore_errors=True)
 
-    return phone_lookup, email_lookup
+    return phone_lookup, email_lookup, photos_by_pk
 
 
 def main():
@@ -247,8 +358,34 @@ def main():
     handles_raw = {str(r["hid"]): r["address"] for r in handle_rows}
 
     print("Looking up names in Contacts...")
-    phone_lookup, email_lookup = load_mac_contacts()
+    phone_lookup, email_lookup, photos_by_pk = load_mac_contacts()
     overrides = load_contacts_overrides()
+
+    # We need to track which AddressBook PK belongs to each resolved name so
+    # we can later look up the photo for each canonical contact.
+    # load_mac_contacts returns phone/email -> name; we need name -> pk.
+    # Re-derive this by re-reading the ABs lightly (just the PK+name columns).
+    ab_name_to_pk: dict = {}   # normalized_name -> [pk, ...]  (for photo lookup)
+    for db_path in find_addressbook_dbs():
+        tmp_dir = None
+        try:
+            tmp_dir = tempfile.mkdtemp(prefix="imessage_dash_ab2_")
+            tmp_db = os.path.join(tmp_dir, "ab.db")
+            shutil.copy2(db_path, tmp_db)
+            conn2 = sqlite3.connect(f"file:{tmp_db}?mode=ro", uri=True)
+            for r in conn2.execute(
+                "SELECT Z_PK, ZFIRSTNAME, ZLASTNAME, ZORGANIZATION FROM ZABCDRECORD"
+            ):
+                full = " ".join(p for p in [r[1], r[2]] if p) or r[3] or ""
+                if full:
+                    norm = re.sub(r"\s+", " ", full).strip().lower()
+                    ab_name_to_pk.setdefault(norm, []).append(r[0])
+            conn2.close()
+        except Exception:
+            pass
+        finally:
+            if tmp_dir:
+                shutil.rmtree(tmp_dir, ignore_errors=True)
 
     resolved_name = {}  # hid -> matched name, or None if unresolved
     auto_matched = 0
@@ -303,6 +440,17 @@ def main():
     merged = len(handles_raw) - len(handles)
     if merged:
         print(f"  Consolidated {merged} duplicate handle(s) (same person, multiple numbers/emails).")
+
+    # Map canonical contact IDs to their AddressBook photos (if any)
+    contact_photos: dict = {}
+    if photos_by_pk:
+        for cid, display_name in handles.items():
+            norm = re.sub(r"\s+", " ", display_name).strip().lower()
+            for pk in ab_name_to_pk.get(norm, []):
+                if pk in photos_by_pk:
+                    contact_photos[cid] = photos_by_pk[pk]
+                    break
+        print(f"  Loaded photos for {len(contact_photos)} contact(s).")
 
     print("Loading chats...")
     chat_rows = cur.execute(
@@ -365,18 +513,64 @@ def main():
     print("Loading messages (this can take a while for large histories)...")
     msg_rows = cur.execute("""
         SELECT m.ROWID as mid, m.text, m.attributedBody, m.date, m.is_from_me,
-               m.handle_id, m.associated_message_type, cmj.chat_id as chat_id
+               m.handle_id, m.associated_message_type, m.balloon_bundle_id,
+               cmj.chat_id as chat_id
         FROM message m
         JOIN chat_message_join cmj ON cmj.message_id = m.ROWID
     """).fetchall()
 
-    messages = []  # [ts_ms, chat_id, sender_id_or_None, is_from_me]
+    messages = []  # [ts_ms, chat_id, sender_id_or_None, is_from_me, is_game_pigeon]
     uni_sent, uni_received = Counter(), Counter()
     bi_sent, bi_received = Counter(), Counter()
     msg_sent, msg_received = Counter(), Counter()
-    chat_uni = defaultdict(Counter)   # chat_id -> Counter (all senders combined)
+    chat_uni = defaultdict(Counter)
     chat_bi = defaultdict(Counter)
     chat_msg_count = Counter()
+
+    # Emoji tracking
+    emoji_sent_ctr, emoji_received_ctr = Counter(), Counter()
+    emoji_by_year_sent: dict = defaultdict(Counter)
+    emoji_by_year_received: dict = defaultdict(Counter)
+
+    # Message-length tracking (chars, words) per message
+    len_sent_chars: list = []
+    len_received_chars: list = []
+    len_by_year_sent: dict = defaultdict(list)   # year -> [char_counts]
+    len_by_year_received: dict = defaultdict(list)
+
+    # Longest messages (keep top-10 heap per side)
+    longest_sent: list = []    # [(char_count, ts, chat_name, text)]
+    longest_received: list = []
+    import heapq
+
+    # Game Pigeon (global by type)
+    gp_by_type: Counter = Counter()
+
+    # Per-person data (1:1 chats only) for fast JS lookups
+    person_1on1_ts: dict = defaultdict(list)    # pid -> [(ts, is_from_me)]
+    person_hour_counts: dict = defaultdict(lambda: [0] * 24)
+    person_word_sent: dict = defaultdict(Counter)
+    person_word_received: dict = defaultdict(Counter)
+    person_emoji_sent: dict = defaultdict(Counter)
+    person_emoji_received: dict = defaultdict(Counter)
+    person_gp_types: dict = defaultdict(Counter)
+    person_gp_count: dict = defaultdict(int)
+    person_chars_sent: dict = defaultdict(list)   # pid -> [char_counts]
+    person_chars_received: dict = defaultdict(list)
+    person_monthly_sent: dict = defaultdict(Counter)    # pid -> "YYYY-MM" -> count
+    person_monthly_received: dict = defaultdict(Counter)
+
+    # Per-chat detailed tracking (for group chat lookup page)
+    chat_emoji: dict = defaultdict(Counter)
+    chat_hour_counts: dict = defaultdict(lambda: [0] * 24)
+    chat_monthly: dict = defaultdict(Counter)           # chat_id -> "YYYY-MM" -> count
+    chat_sender_monthly: dict = defaultdict(lambda: defaultdict(Counter))  # chat_id -> pid -> month -> n
+
+    # Map person_id -> their 1:1 chat_id (filled below during message loop)
+    person_to_1on1: dict = {}
+    for cid, chat in chats.items():
+        if not chat["group"] and len(chat["participants"]) == 1:
+            person_to_1on1[chat["participants"][0]] = cid
 
     seen_pairs = set()
     for r in msg_rows:
@@ -395,9 +589,39 @@ def main():
         is_from_me = bool(r["is_from_me"])
         raw_sender = str(r["handle_id"]) if r["handle_id"] else None
         sender = None if is_from_me else canonical_of.get(raw_sender, raw_sender)
+        bundle = (r["balloon_bundle_id"] or "").lower()
+        is_game_pigeon = 1 if "gamepigeon" in bundle else 0
 
-        messages.append([ts, chat_id, sender, 1 if is_from_me else 0])
+        messages.append([ts, chat_id, sender, 1 if is_from_me else 0, is_game_pigeon])
         chat_msg_count[chat_id] += 1
+
+        # Track hour-of-day for the sender across all chats
+        if not is_from_me and sender:
+            hour = datetime.fromtimestamp(ts / 1000).hour
+            person_hour_counts[sender][hour] += 1
+
+        # Per-chat tracking for group chat lookup
+        month_key = datetime.fromtimestamp(ts / 1000).strftime("%Y-%m")
+        chat_monthly[chat_id][month_key] += 1
+        hour = datetime.fromtimestamp(ts / 1000).hour
+        chat_hour_counts[chat_id][hour] += 1
+        if not is_from_me and sender:
+            chat_sender_monthly[chat_id][sender][month_key] += 1
+
+        # Per-person 1:1 tracking (for response times, word freq, emojis, lengths)
+        is_group_chat = chats[chat_id]["group"]
+        other_in_1on1 = None
+        if not is_group_chat and chats[chat_id]["participants"]:
+            other_in_1on1 = chats[chat_id]["participants"][0]
+            person_1on1_ts[other_in_1on1].append((ts, is_from_me))
+
+        # Game Pigeon tracking
+        if is_game_pigeon and bundle:
+            game_name = gp_game_name(bundle)
+            gp_by_type[game_name] += 1
+            if other_in_1on1:
+                person_gp_types[other_in_1on1][game_name] += 1
+                person_gp_count[other_in_1on1] += 1
 
         # word/phrase/full-message frequency: skip tapback/reaction rows
         assoc_type = r["associated_message_type"] or 0
@@ -410,20 +634,70 @@ def main():
             continue
 
         clean_text = re.sub(r"\s+", " ", text).strip()
-        raw = tokenize_raw(text)
+        if not clean_text:
+            continue
+
+        raw = tokenize_raw(clean_text)
         uni = unigrams_from_raw(raw)
         bi = bigrams_from_raw(raw)
+
+        # Emoji extraction
+        found_emojis = EMOJI_RE.findall(clean_text)
+        year = datetime.fromtimestamp(ts / 1000).year
+
+        # Message character count (skip Game Pigeon placeholder texts)
+        if not is_game_pigeon:
+            char_count = len(clean_text)
+            if is_from_me:
+                len_sent_chars.append(char_count)
+                len_by_year_sent[year].append(char_count)
+                # Track longest (maintain top-10 min-heap)
+                entry = (char_count, ts, chats[chat_id]["name"], clean_text)
+                if len(longest_sent) < 10:
+                    heapq.heappush(longest_sent, entry)
+                elif char_count > longest_sent[0][0]:
+                    heapq.heapreplace(longest_sent, entry)
+            else:
+                len_received_chars.append(char_count)
+                len_by_year_received[year].append(char_count)
+                entry = (char_count, ts, chats[chat_id]["name"], clean_text)
+                if len(longest_received) < 10:
+                    heapq.heappush(longest_received, entry)
+                elif char_count > longest_received[0][0]:
+                    heapq.heapreplace(longest_received, entry)
 
         if is_from_me:
             uni_sent.update(uni)
             bi_sent.update(bi)
             if clean_text:
                 msg_sent[clean_text] += 1
+            if found_emojis:
+                emoji_sent_ctr.update(found_emojis)
+                emoji_by_year_sent[year].update(found_emojis)
+                chat_emoji[chat_id].update(found_emojis)
+            # Per-person 1:1 stats
+            if other_in_1on1:
+                person_word_sent[other_in_1on1].update(uni)
+                person_emoji_sent[other_in_1on1].update(found_emojis)
+                if not is_game_pigeon:
+                    person_chars_sent[other_in_1on1].append(len(clean_text))
+                person_monthly_sent[other_in_1on1][month_key] += 1
         else:
             uni_received.update(uni)
             bi_received.update(bi)
             if clean_text:
                 msg_received[clean_text] += 1
+            if found_emojis:
+                emoji_received_ctr.update(found_emojis)
+                emoji_by_year_received[year].update(found_emojis)
+                chat_emoji[chat_id].update(found_emojis)
+            # Per-person 1:1 stats
+            if other_in_1on1:
+                person_word_received[other_in_1on1].update(uni)
+                person_emoji_received[other_in_1on1].update(found_emojis)
+                if not is_game_pigeon:
+                    person_chars_received[other_in_1on1].append(len(clean_text))
+                person_monthly_received[other_in_1on1][month_key] += 1
         chat_uni[chat_id].update(uni)
         chat_bi[chat_id].update(bi)
 
@@ -439,19 +713,154 @@ def main():
     bi_overall = bi_sent + bi_received
     msg_overall = msg_sent + msg_received
 
-    # Per-chat vocabulary only for the top 5 group chats (by all-time volume),
-    # to keep the output file a reasonable size.
-    top_group_chat_ids = [
-        cid for cid, _ in chat_msg_count.most_common()
-        if chats.get(cid, {}).get("group")
-    ][:5]
+    # ── Chat word freq: expand to all group chats (capped at 30 per chat) ──
+    all_group_ids = [cid for cid, _ in chat_msg_count.most_common()
+                     if chats.get(cid, {}).get("group")]
     chat_word_freq = {
         cid: {
             "unigrams": chat_uni[cid].most_common(30),
             "bigrams": chat_bi[cid].most_common(15),
         }
-        for cid in top_group_chat_ids
+        for cid in all_group_ids
+        if chat_uni[cid] or chat_bi[cid]
     }
+
+    # ── Emoji stats ──
+    def _top_emoji(counter, n=30):
+        return [[e, c] for e, c in counter.most_common(n)]
+
+    emoji_by_year_sent_serializable = {
+        str(y): _top_emoji(ctr) for y, ctr in sorted(emoji_by_year_sent.items())
+    }
+    emoji_by_year_received_serializable = {
+        str(y): _top_emoji(ctr) for y, ctr in sorted(emoji_by_year_received.items())
+    }
+
+    # ── Message length stats ──
+    def _len_stats(char_list):
+        if not char_list:
+            return None
+        s = sorted(char_list)
+        n = len(s)
+        return {
+            "avg_chars": round(sum(s) / n, 1),
+            "median_chars": (s[n // 2 - 1] + s[n // 2]) / 2 if n % 2 == 0 else s[n // 2],
+            "count": n,
+        }
+
+    def _len_stats_by_year(year_dict):
+        return {str(y): _len_stats(lst) for y, lst in sorted(year_dict.items())}
+
+    msg_length = {
+        "sent": _len_stats(len_sent_chars),
+        "received": _len_stats(len_received_chars),
+        "by_year_sent": _len_stats_by_year(len_by_year_sent),
+        "by_year_received": _len_stats_by_year(len_by_year_received),
+    }
+
+    # ── Longest messages ──
+    def _serialise_longest(heap):
+        out = sorted(heap, reverse=True)[:5]  # top-5 by char count
+        return [
+            {
+                "chars": item[0],
+                "ts": item[1],
+                "chat": item[2],
+                "preview": item[3][:120] + ("…" if len(item[3]) > 120 else ""),
+                "full": item[3],
+            }
+            for item in out
+        ]
+
+    longest_messages = {
+        "sent": _serialise_longest(longest_sent),
+        "received": _serialise_longest(longest_received),
+    }
+
+    # ── Person profiles (precomputed for fast JS lookup) ──
+    print("  Computing per-person profiles...")
+    # Map person -> their group chat ids + message count in that group
+    person_group_chats_data: dict = defaultdict(list)
+    for cid, chat in chats.items():
+        if chat["group"]:
+            gchat_counts = Counter()
+            for m in messages:
+                if m[1] == cid and m[2]:
+                    gchat_counts[m[2]] += 1
+            for pid in chat["participants"]:
+                person_group_chats_data[pid].append({
+                    "id": cid,
+                    "name": chat["name"],
+                    "count": gchat_counts.get(pid, 0),
+                })
+
+    person_profiles = {}
+    for pid in handles:
+        one_on_one_msgs = sorted(person_1on1_ts.get(pid, []), key=lambda x: x[0])
+        bursts = _burst_responses(one_on_one_msgs)
+
+        sent_1on1 = sum(1 for _, m in one_on_one_msgs if m)
+        received_1on1 = sum(1 for _, m in one_on_one_msgs if not m)
+
+        your_med = _median(bursts["your"])
+        their_med = _median(bursts["their"])
+
+        gc = sorted(
+            person_group_chats_data.get(pid, []),
+            key=lambda x: x["count"], reverse=True
+        )[:5]
+
+        combined_words = person_word_sent[pid] + person_word_received[pid]
+        combined_phrases = defaultdict(int)  # bigrams tracked via chat_bi per chat - reuse if 1:1 exists
+        one_on_one_cid = person_to_1on1.get(pid)
+        if one_on_one_cid:
+            for bg, cnt in chat_bi.get(one_on_one_cid, {}).items():
+                combined_phrases[bg] += cnt
+
+        person_profiles[pid] = {
+            "sent": sent_1on1,
+            "received": received_1on1,
+            "your_response_ms": your_med,
+            "their_response_ms": their_med,
+            "your_response_pcts": _response_buckets(bursts["your"]),
+            "their_response_pcts": _response_buckets(bursts["their"]),
+            "hour_counts": person_hour_counts[pid],
+            "group_chats": gc,
+            "game_pigeon": person_gp_count.get(pid, 0),
+            "game_pigeon_types": [[k, v] for k, v in
+                                  person_gp_types[pid].most_common(10)],
+            "top_words": combined_words.most_common(20) if combined_words else [],
+            "top_phrases": sorted(combined_phrases.items(), key=lambda x: -x[1])[:10],
+            "emojis_sent": _top_emoji(person_emoji_sent.get(pid, Counter()), 15),
+            "emojis_received": _top_emoji(person_emoji_received.get(pid, Counter()), 15),
+            "avg_chars_sent": _avg(person_chars_sent.get(pid, [])),
+            "avg_chars_received": _avg(person_chars_received.get(pid, [])),
+            "monthly_sent": dict(person_monthly_sent.get(pid, {})),
+            "monthly_received": dict(person_monthly_received.get(pid, {})),
+        }
+
+    # ── Group chat profiles (for the Lookup page) ──
+    chat_profiles = {}
+    for cid, chat in chats.items():
+        if not chat["group"]:
+            continue
+        # Compute per-sender totals from messages list
+        sender_cnts: Counter = Counter()
+        for m in messages:
+            if m[1] == cid and m[2]:
+                sender_cnts[m[2]] += 1
+        chat_profiles[cid] = {
+            "name": chat["name"],
+            "total": chat_msg_count.get(cid, 0),
+            "participants": chat["participants"],
+            "sender_counts": [[pid, cnt] for pid, cnt in sender_cnts.most_common()],
+            "top_words": chat_uni[cid].most_common(20),
+            "top_phrases": chat_bi[cid].most_common(10),
+            "top_emojis": _top_emoji(chat_emoji.get(cid, Counter()), 15),
+            "hour_counts": chat_hour_counts[cid],
+            "activity_by_month": dict(chat_monthly.get(cid, {})),
+        }
+    print(f"  Built profiles for {len(chat_profiles)} group chats.")
 
     data = {
         "meta": {
@@ -482,6 +891,21 @@ def main():
             },
         },
         "chat_word_freq": chat_word_freq,
+        "emoji_freq": {
+            "sent": _top_emoji(emoji_sent_ctr),
+            "received": _top_emoji(emoji_received_ctr),
+            "overall": _top_emoji(emoji_sent_ctr + emoji_received_ctr),
+            "by_year_sent": emoji_by_year_sent_serializable,
+            "by_year_received": emoji_by_year_received_serializable,
+        },
+        "msg_length": msg_length,
+        "longest_messages": longest_messages,
+        "game_pigeon": {
+            "by_type": [[k, v] for k, v in gp_by_type.most_common()],
+        },
+        "person_profiles": person_profiles,
+        "contact_photos": contact_photos,
+        "chat_profiles": chat_profiles,
     }
 
     print(f"Loaded {len(messages):,} messages across {len(chats):,} chats.")
@@ -503,10 +927,20 @@ def main():
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
         f.write(html)
 
+    # Generate the separate Lookup page if its template exists
+    if os.path.exists(LOOKUP_TEMPLATE_FILE):
+        with open(LOOKUP_TEMPLATE_FILE, "r", encoding="utf-8") as f:
+            lookup_html = f.read()
+        lookup_html = lookup_html.replace("__IMESSAGE_DATA__", json.dumps(data))
+        with open(LOOKUP_OUTPUT_FILE, "w", encoding="utf-8") as f:
+            f.write(lookup_html)
+        print(f"Done. Open: {OUTPUT_FILE}")
+        print(f"      Lookup: {LOOKUP_OUTPUT_FILE}")
+    else:
+        print(f"\nDone. Open: {OUTPUT_FILE}")
+
     conn.close()
     shutil.rmtree(os.path.dirname(tmp_db), ignore_errors=True)
-
-    print(f"\nDone. Open: {OUTPUT_FILE}")
 
 
 if __name__ == "__main__":

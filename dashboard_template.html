@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Message Statement</title>
+<title>iMessages Wrapped</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -63,6 +63,87 @@
   .hero-stat .label{font-size:11.5px;color:var(--muted);margin-top:8px;text-transform:uppercase;letter-spacing:.06em;}
 
   .main-tabs{display:flex;gap:28px;border-bottom:1px solid var(--border);margin-bottom:28px;}
+
+  .section-head-static{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;}
+
+  .lookup-panel{padding:14px;}
+  .lookup-search-wrap{display:flex;gap:10px;align-items:center;}
+  #lookup-search{
+    flex:1;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;
+    color:var(--text);font-family:var(--font-body);font-size:14px;padding:10px 12px;
+  }
+  #lookup-search:focus{outline:none;border-color:var(--teal);}
+  .lookup-clear{
+    font-family:var(--font-mono);font-size:11px;color:var(--muted);background:transparent;
+    border:1px solid var(--border);border-radius:6px;padding:8px 12px;cursor:pointer;
+  }
+  .lookup-clear:hover{color:var(--text);}
+  .lookup-results{margin-top:10px;border-top:1px solid var(--border);}
+  .lookup-result-row{padding:10px 4px;border-bottom:1px solid var(--border);cursor:pointer;}
+  .lookup-result-row:last-child{border-bottom:none;}
+  .lookup-result-row:hover{background:var(--panel-2);}
+  .lookup-result-name{font-size:14px;color:var(--text);}
+  .lookup-result-sub{font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-top:2px;}
+
+  .lookup-profile-head{margin:30px 0 14px;}
+  .lookup-profile-name{font-family:var(--font-display);font-size:22px;font-weight:600;}
+  .lookup-profile-sub{font-family:var(--font-mono);font-size:12px;color:var(--muted);margin-top:4px;}
+
+  .reply-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:14px;}
+  .reply-card{background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:16px;text-align:center;}
+  .reply-label{font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em;}
+  .reply-value{font-family:var(--font-mono);font-size:22px;font-weight:600;}
+  .reply-value.teal{color:var(--teal);}
+  .reply-value.amber{color:var(--amber);}
+
+  .hour-strip{display:grid;grid-template-columns:repeat(24,1fr);gap:2px;padding:14px;}
+  .hour-cell{aspect-ratio:1;border-radius:2px;background:var(--panel-2);}
+
+  .gp-stat{padding:16px;font-size:14px;color:var(--text);}
+  .gp-num{font-family:var(--font-mono);font-size:20px;font-weight:600;color:var(--teal);margin-right:6px;}
+
+  /* Emoji chip cloud */
+  .emoji-cloud{display:flex;flex-wrap:wrap;gap:8px;padding:14px;}
+  .emoji-chip{font-size:15px;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:5px 10px;display:flex;align-items:center;gap:6px;}
+  .emoji-chip .en{font-family:var(--font-mono);font-size:11px;color:var(--muted);}
+
+  /* Year mini-toggle (for emoji/length sections) */
+  .year-pills{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px;}
+  .year-pill{font-family:var(--font-mono);font-size:11px;color:var(--muted);background:var(--panel);border:1px solid var(--border);padding:5px 10px;border-radius:20px;cursor:pointer;}
+  .year-pill.active{color:var(--teal);border-color:var(--teal);}
+
+  /* Message length stats grid */
+  .length-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;padding:14px;}
+  .length-card{background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:14px;}
+  .length-label{font-family:var(--font-mono);font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;}
+  .length-value{font-family:var(--font-mono);font-size:20px;font-weight:600;color:var(--text);}
+  .length-value.teal{color:var(--teal);}
+  .length-value.amber{color:var(--amber);}
+
+  /* Longest messages */
+  .long-msg-row{padding:12px;border-bottom:1px solid var(--border);}
+  .long-msg-row:last-child{border-bottom:none;}
+  .long-msg-meta{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;gap:8px;flex-wrap:wrap;}
+  .long-msg-chat{font-family:var(--font-mono);font-size:11px;color:var(--teal);}
+  .long-msg-date{font-family:var(--font-mono);font-size:11px;color:var(--muted);}
+  .long-msg-preview{font-size:13px;color:var(--text);line-height:1.5;white-space:pre-wrap;word-break:break-word;}
+  .long-msg-expand{font-family:var(--font-mono);font-size:11px;color:var(--teal);cursor:pointer;margin-top:6px;background:none;border:none;padding:0;}
+
+  /* Chart canvas hover dot */
+  .chart-canvas-wrap{position:relative;}
+  #chart-dot{position:absolute;width:8px;height:8px;border-radius:50%;background:var(--teal);box-shadow:0 0 6px var(--teal);pointer-events:none;display:none;transform:translate(-50%,-50%);}
+
+  /* Legend on top 10 panel */
+  .panel-legend{display:flex;gap:14px;padding:10px 12px 2px;font-family:var(--font-mono);font-size:11px;color:var(--muted);}
+  .panel-legend .dot{width:8px;height:8px;border-radius:2px;display:inline-block;margin-right:4px;vertical-align:middle;}
+
+  /* GP type list */
+  .gp-type-list{padding:8px 12px 4px;}
+  .gp-type-row{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);}
+  .gp-type-row:last-child{border-bottom:none;}
+  .gp-type-name{font-size:13px;color:var(--text);flex:1;}
+  .gp-type-count{font-family:var(--font-mono);font-size:12px;color:var(--muted);}
+
   .main-tab{
     font-family:var(--font-display);font-size:15px;font-weight:600;color:var(--muted);
     background:transparent;border:none;padding:0 0 12px;cursor:pointer;
@@ -70,6 +151,13 @@
   }
   .main-tab.active{color:var(--teal);border-bottom-color:var(--teal);}
   .main-tab:hover:not(.active){color:var(--text);}
+  .main-tab-divider{width:1px;background:var(--border);margin:0 4px 12px;align-self:stretch;flex-shrink:0;}
+  .main-tab-link{
+    font-family:var(--font-display);font-size:15px;font-weight:600;color:var(--muted);
+    text-decoration:none;padding:0 0 12px;border-bottom:2px solid transparent;margin-bottom:-1px;
+    display:inline-flex;align-items:center;gap:5px;
+  }
+  .main-tab-link:hover{color:var(--teal);}
 
   /* Sections */
   .section{margin-bottom:38px;}
@@ -105,7 +193,8 @@
   .subpanel .rank-bar-fill{background:var(--amber);}
 
   /* Two column grid */
-  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;}
+  .grid-2 .section{height:100%;}
   @media (max-width:820px){.grid-2{grid-template-columns:1fr;}.hero-row{grid-template-columns:repeat(2,1fr);}}
 
   /* Activity chart */
@@ -187,7 +276,13 @@
 <script>
 const DATA = JSON.parse(document.getElementById('data-blob').textContent);
 
-const state = { rangeKey: 'all', vocabAudience: 'overall', vocabGram: 'unigrams', openChat: null, collapsed: {}, mainTab: 'people-groups' };
+const state = {
+  rangeKey: 'all', vocabAudience: 'overall', vocabGram: 'unigrams', openChat: null, collapsed: {},
+  mainTab: 'people-groups', lookupQuery: '', lookupPersonId: null, _focusLookup: false, _lookupCursor: null,
+  emojiYear: 'all', emojiAud: 'overall',
+  lenYear: 'all',
+  longestSide: 'sent', longestExpanded: {},
+};
 
 function setMainTab(t){ state.mainTab = t; render(); }
 
@@ -233,8 +328,8 @@ const RANGES = buildRanges();
 function computeRangeBounds(key, minTs, maxTs){
   if(key==='all') return {start:minTs, end:maxTs};
   const year = parseInt(key,10);
-  const start = Math.max(minTs, new Date(year,0,1).getTime());
-  const end = Math.min(maxTs, new Date(year+1,0,1).getTime()-1);
+  const start = new Date(year, 0, 1, 0, 0, 0, 0).getTime();
+  const end = new Date(year, 11, 31, 23, 59, 59, 999).getTime();
   return {start, end};
 }
 
@@ -304,6 +399,224 @@ function computeAggregates(range){
   return {sent, received, total: sent+received, topContacts, topChats, disparities, dayEntries, heat};
 }
 
+function setLookupQuery(el){
+  state.lookupQuery = el.value;
+  state.lookupPersonId = null;
+  state._focusLookup = true;
+  state._lookupCursor = el.selectionStart;
+  render();
+}
+
+function selectLookupPerson(id){
+  state.lookupPersonId = id;
+  state.lookupQuery = DATA.handles[id] || id;
+  state._focusLookup = false;
+  render();
+}
+
+function clearLookupPerson(){
+  state.lookupPersonId = null;
+  state.lookupQuery = '';
+  state._focusLookup = true;
+  state._lookupCursor = 0;
+  render();
+}
+
+function formatDuration(ms){
+  if(ms == null) return '—';
+  const mins = ms/60000;
+  if(mins < 1) return '<1m';
+  if(mins < 60) return Math.round(mins)+'m';
+  const hours = mins/60;
+  if(hours < 24){
+    const h = Math.floor(hours);
+    const m = Math.round(mins - h*60);
+    return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  }
+  return Math.round(hours/24)+'d';
+}
+
+function formatHourLabel(h){
+  const period = h < 12 ? 'AM' : 'PM';
+  let displayHour = h % 12;
+  if(displayHour === 0) displayHour = 12;
+  return `${displayHour} ${period}`;
+}
+
+function getPersonProfile(personId){
+  // Use precomputed profile from Python — instant, no message iteration
+  const p = (DATA.person_profiles || {})[personId] || {};
+  const name = DATA.handles[personId] || personId;
+  const hourCounts = p.hour_counts || Array(24).fill(0);
+  const peakHour = hourCounts.indexOf(Math.max(...hourCounts));
+  return {
+    id: personId, name,
+    sent: p.sent || 0,
+    received: p.received || 0,
+    hasOneOnOne: (p.sent||0) + (p.received||0) > 0,
+    yourResponseMs: p.your_response_ms || null,
+    theirResponseMs: p.their_response_ms || null,
+    yourResponsePcts: p.your_response_pcts || {},
+    theirResponsePcts: p.their_response_pcts || {},
+    peakHour,
+    hourCounts,
+    groupChats: p.group_chats || [],
+    gamePigeon: p.game_pigeon || 0,
+    gamePigeonTypes: p.game_pigeon_types || [],
+    topWords: p.top_words || [],
+    emojis_sent: p.emojis_sent || [],
+    emojis_received: p.emojis_received || [],
+    avgCharsSent: p.avg_chars_sent,
+    avgCharsReceived: p.avg_chars_received,
+  };
+}
+
+function hourlyStripHtml(hourCounts){
+  const max = Math.max(...hourCounts,1);
+  let cells = '';
+  for(let h=0;h<24;h++){
+    const alpha = hourCounts[h]/max;
+    const tip = `${formatHourLabel(h)} — ${fmt(hourCounts[h])} message${hourCounts[h]===1?'':'s'}`;
+    cells += `<div class="hour-cell" style="background:rgba(94,234,212,${(0.06+alpha*0.85).toFixed(3)})"
+      data-tip="${esc(tip)}" onmouseenter="showTip(event,this.dataset.tip)" onmousemove="moveTip(event)" onmouseleave="hideTip()"></div>`;
+  }
+  const labels = ['12a','','','3a','','','6a','','','9a','','','12p','','','3p','','','6p','','','9p','',''];
+  const labelRow = labels.map(l=>`<div style="text-align:center;font-family:var(--font-mono);font-size:8px;color:var(--muted)">${l}</div>`).join('');
+  return `<div class="hour-strip">${cells}</div><div style="display:grid;grid-template-columns:repeat(24,1fr);padding:0 14px 8px">${labelRow}</div>`;
+}
+
+function responsePctsHtml(pcts, cls){
+  if(!pcts || !Object.keys(pcts).length) return '<div class="empty">Not enough data.</div>';
+  return Object.entries(pcts).map(([k,v])=>
+    `<div class="gp-type-row"><div class="gp-type-name" style="font-family:var(--font-mono);font-size:12px">within ${k}</div><div style="flex:1;margin:0 8px"><div class="rank-bar-track"><div class="rank-bar-fill ${cls}" style="width:${v}%"></div></div></div><div class="gp-type-count">${v}%</div></div>`
+  ).join('');
+}
+
+function renderPersonProfile(p){
+  const groupChatsHtml = p.groupChats.length
+    ? p.groupChats.map((g,i)=>rankRowHtml(i+1, g.name, g.count, p.groupChats[0].count)).join('')
+    : '<div class="empty">Not in any group chats together.</div>';
+
+  // Game Pigeon section
+  let gpInner;
+  if(p.gamePigeon >= 5){
+    const typeRows = p.gamePigeonTypes.length
+      ? p.gamePigeonTypes.map(([game,cnt])=>`<div class="gp-type-row"><div class="gp-type-name">${esc(game)}</div><div class="gp-type-count">${fmt(cnt)}</div></div>`).join('')
+      : '';
+    gpInner = `<div class="gp-stat"><span class="gp-num">${fmt(p.gamePigeon)}</span> Game Pigeon messages in this 1:1</div>
+      ${typeRows ? `<div class="gp-type-list">${typeRows}</div>` : ''}`;
+  } else {
+    gpInner = '<div class="empty">Not much Game Pigeon activity together.</div>';
+  }
+
+  // Word cloud
+  const wordCloud = p.topWords.length
+    ? `<div class="word-cloud">`+p.topWords.slice(0,20).map(([w,c])=>`<div class="word-chip"><b>${esc(w)}</b><span class="n">${fmt(c)}</span></div>`).join('')+`</div>`
+    : '<div class="empty">Not enough text messages to show words.</div>';
+
+  // Emojis
+  const emojiRow = (items)=> items.length
+    ? `<div class="emoji-cloud">`+items.slice(0,12).map(([e,c])=>`<div class="emoji-chip">${esc(e)}<span class="en">${fmt(c)}</span></div>`).join('')+`</div>`
+    : '<div class="empty">No emoji found.</div>';
+
+  const addrs = (DATA.handle_contacts && DATA.handle_contacts[p.id]) || [];
+  const addrLine = addrs.length && !(addrs.length===1 && addrs[0]===p.name) ? esc(addrs.join(', ')) : '';
+
+  return `
+    <div class="lookup-profile">
+      <div class="lookup-profile-head">
+        <div class="lookup-profile-name">${esc(p.name)}</div>
+        ${addrLine ? `<div class="lookup-profile-sub">${addrLine}</div>` : ''}
+      </div>
+
+      <div class="hero-row">
+        <div class="hero-stat"><div class="num teal">${fmt(p.sent+p.received)}</div><div class="label">1:1 messages</div></div>
+        <div class="hero-stat"><div class="num">${fmt(p.sent)}</div><div class="label">You sent</div></div>
+        <div class="hero-stat"><div class="num amber">${fmt(p.received)}</div><div class="label">They sent</div></div>
+        <div class="hero-stat"><div class="num">${p.hasOneOnOne && p.hourCounts ? formatHourLabel(p.peakHour) : '—'}</div><div class="label">They usually text</div></div>
+      </div>
+
+      ${sectionHtml('lookup-reply', 'Reply Times', 'burst-based · 1:1 only · gaps under 48h', `
+        <div class="reply-grid">
+          <div class="reply-card">
+            <div class="reply-label">Your median reply</div>
+            <div class="reply-value teal">${formatDuration(p.yourResponseMs)}</div>
+            <div style="margin-top:12px;">${responsePctsHtml(p.yourResponsePcts,'sent')}</div>
+          </div>
+          <div class="reply-card">
+            <div class="reply-label">Their median reply</div>
+            <div class="reply-value amber">${formatDuration(p.theirResponseMs)}</div>
+            <div style="margin-top:12px;">${responsePctsHtml(p.theirResponsePcts,'received')}</div>
+          </div>
+        </div>
+      `)}
+
+      ${sectionHtml('lookup-hours', 'When They Text', 'across all shared chats, all-time', `<div class="panel">${hourlyStripHtml(p.hourCounts)}</div>`)}
+
+      ${sectionHtml('lookup-groups', 'Shared Group Chats', 'group chats you have together', `<div class="panel">${groupChatsHtml}</div>`)}
+
+      ${sectionHtml('lookup-words', 'Top Words (1:1)', 'combined words from your 1:1 conversation', `<div class="panel">${wordCloud}</div>`)}
+
+      ${sectionHtml('lookup-emoji', 'Emoji (1:1)', 'all-time', `<div class="panel"><div style="padding:4px 0 0 8px;font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-bottom:-4px">YOU SENT</div>${emojiRow(p.emojis_sent)}<div style="padding:4px 0 0 8px;font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-bottom:-4px">THEY SENT</div>${emojiRow(p.emojis_received)}</div>`)}
+
+      ${p.avgCharsSent ? sectionHtml('lookup-len', 'Message Length (1:1)', 'average characters per message', `
+        <div class="reply-grid">
+          <div class="reply-card"><div class="reply-label">Your avg length</div><div class="reply-value teal">${p.avgCharsSent} chars</div></div>
+          <div class="reply-card"><div class="reply-label">Their avg length</div><div class="reply-value amber">${p.avgCharsReceived||'—'} chars</div></div>
+        </div>
+      `) : ''}
+
+      ${sectionHtml('lookup-gp', 'Game Pigeon', '1:1 only', `<div class="panel">${gpInner}</div>`)}
+    </div>
+  `;
+}
+
+function lookupHtml(){
+  const q = (state.lookupQuery||'').trim().toLowerCase();
+  let results = [];
+  if(!state.lookupPersonId && q){
+    results = Object.entries(DATA.handles)
+      .filter(([id,name])=>{
+        if(name.toLowerCase().includes(q)) return true;
+        const addrs = DATA.handle_contacts && DATA.handle_contacts[id];
+        return addrs && addrs.some(a=>a.toLowerCase().includes(q));
+      })
+      .slice(0,8);
+  }
+
+  const searchBox = `
+    <div class="lookup-search-wrap">
+      <input id="lookup-search" type="text" placeholder="Search a name, number, or email…"
+        value="${esc(state.lookupQuery||'')}" oninput="setLookupQuery(this)" />
+      ${state.lookupPersonId ? `<button class="lookup-clear" onclick="clearLookupPerson()">Clear</button>` : ''}
+    </div>
+  `;
+
+  const resultsHtml = results.length ? `
+    <div class="lookup-results">
+      ${results.map(([id,name])=>`
+        <div class="lookup-result-row" onclick="selectLookupPerson('${id}')">
+          <div class="lookup-result-name">${esc(name)}</div>
+          <div class="lookup-result-sub">${esc((DATA.handle_contacts[id]||[]).join(', '))}</div>
+        </div>
+      `).join('')}
+    </div>
+  ` : (q ? `<div class="empty">No matches.</div>` : '');
+
+  const profileHtml = state.lookupPersonId ? renderPersonProfile(getPersonProfile(state.lookupPersonId)) : '';
+
+  return `
+    <div class="section">
+      <div class="section-head-static"><div class="section-title">Look Up a Person</div><div class="section-note">search by name, number, or email</div></div>
+      <div class="panel lookup-panel">
+        ${searchBox}
+        ${resultsHtml}
+      </div>
+    </div>
+    ${profileHtml}
+  `;
+}
+
 function contactTip(id){
   if(id === 'me') return 'You';
   const name = (DATA.handles && DATA.handles[id]) || id;
@@ -327,21 +640,21 @@ function rankRowHtml(idx, name, count, max, tag, clickable, extraClass, tipOverr
   </div>`;
 }
 
-function splitRankRowHtml(idx, name, sent, received, max, tipOverride){
+function splitRankRowHtml(idx, name, sent, received, max, contactInfoTip){
   const total = sent + received;
   const totalPct = max>0 ? Math.max(4,(total/max)*100) : 0;
   const sentShare = total ? (sent/total*100) : 50;
   const recvShare = 100 - sentShare;
-  const tip = tipOverride || name;
-  const sentTip = `${name} — Sent ${fmt(sent)}`;
-  const recvTip = `${name} — Received ${fmt(received)}`;
-  return `<div class="rank-row">
+  // The whole row shows combined stats; name overrides with contact info on hover
+  const rowTip = `${name} — Sent ${fmt(sent)} · Received ${fmt(received)}`;
+  const nameTip = contactInfoTip && contactInfoTip !== name ? contactInfoTip : rowTip;
+  return `<div class="rank-row" data-tip="${esc(rowTip)}" onmouseenter="showTip(event,this.dataset.tip)" onmousemove="moveTip(event)" onmouseleave="hideTip()">
     <div class="rank-idx">${String(idx).padStart(2,'0')}</div>
-    <div class="rank-name" data-tip="${esc(tip)}" onmouseenter="showTip(event,this.dataset.tip)" onmousemove="moveTip(event)" onmouseleave="hideTip()" aria-label="${esc(tip)}">${esc(name)}</div>
+    <div class="rank-name" data-tip="${esc(nameTip)}" onmouseenter="showTip(event,this.dataset.tip);event.stopPropagation()" onmousemove="moveTip(event)" onmouseleave="hideTip()" aria-label="${esc(nameTip)}">${esc(name)}</div>
     <div class="rank-bar-track">
       <div class="rank-bar-fill-wrap" style="width:${totalPct}%">
-        <div class="rank-bar-fill sent" style="width:${sentShare}%" data-tip="${esc(sentTip)}" onmouseenter="showTip(event,this.dataset.tip)" onmousemove="moveTip(event)" onmouseleave="hideTip()" aria-label="${esc(sentTip)}"></div>
-        <div class="rank-bar-fill received" style="width:${recvShare}%" data-tip="${esc(recvTip)}" onmouseenter="showTip(event,this.dataset.tip)" onmousemove="moveTip(event)" onmouseleave="hideTip()" aria-label="${esc(recvTip)}"></div>
+        <div class="rank-bar-fill sent" style="width:${sentShare}%"></div>
+        <div class="rank-bar-fill received" style="width:${recvShare}%"></div>
       </div>
     </div>
     <div class="rank-count">${fmt(total)}</div>
@@ -403,6 +716,101 @@ function moveTip(e){
 function hideTip(){
   const tip = document.getElementById('app-tooltip');
   if(tip) tip.style.display = 'none';
+}
+
+function emojiStatsHtml(){
+  const years = Object.keys(DATA.emoji_freq.by_year_sent||{}).sort();
+  const allYears = [...new Set([...years, ...Object.keys(DATA.emoji_freq.by_year_received||{})])].sort();
+  const [emojiYear, setEmojiYear] = [state.emojiYear||'all', (y)=>{ state.emojiYear=y; render(); }];
+
+  const audTab = (key,label) => `<button class="tab-btn${state.emojiAud===key?' active':''}" onclick="state.emojiAud='${key}';render()">${label}</button>`;
+
+  let items;
+  if(emojiYear==='all'){
+    const src = state.emojiAud==='sent' ? DATA.emoji_freq.sent : state.emojiAud==='received' ? DATA.emoji_freq.received : DATA.emoji_freq.overall;
+    items = src||[];
+  } else {
+    const sentY = (DATA.emoji_freq.by_year_sent||{})[emojiYear]||[];
+    const recvY = (DATA.emoji_freq.by_year_received||{})[emojiYear]||[];
+    if(state.emojiAud==='sent') items=sentY;
+    else if(state.emojiAud==='received') items=recvY;
+    else {
+      const m = {};
+      for(const [e,c] of sentY) m[e]=(m[e]||0)+c;
+      for(const [e,c] of recvY) m[e]=(m[e]||0)+c;
+      items=Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,30);
+    }
+  }
+
+  const pills = [`<button class="year-pill${emojiYear==='all'?' active':''}" onclick="state.emojiYear='all';render()">All time</button>`,
+    ...allYears.map(y=>`<button class="year-pill${emojiYear===y?' active':''}" onclick="state.emojiYear='${y}';render()">${y}</button>`)
+  ].join('');
+
+  const chips = items.length
+    ? items.slice(0,40).map(([e,c])=>`<div class="emoji-chip">${esc(e)}<span class="en">${fmt(c)}</span></div>`).join('')
+    : `<div class="empty">No emoji found.</div>`;
+
+  return sectionHtml('emoji', 'Emoji', 'frequency of emojis used', `
+    <div class="panel" style="padding:12px;">
+      <div class="tabs" style="margin-bottom:8px;">${audTab('overall','Overall')}${audTab('sent','You')}${audTab('received','Everyone else')}</div>
+      <div class="year-pills">${pills}</div>
+      <div class="emoji-cloud">${chips}</div>
+    </div>
+  `);
+}
+
+function msgLengthHtml(){
+  const years = [...new Set([...Object.keys(DATA.msg_length.by_year_sent||{}), ...Object.keys(DATA.msg_length.by_year_received||{})])].sort();
+  const sel = state.lenYear||'all';
+  const pills = [`<button class="year-pill${sel==='all'?' active':''}" onclick="state.lenYear='all';render()">All time</button>`,
+    ...years.map(y=>`<button class="year-pill${sel===y?' active':''}" onclick="state.lenYear='${y}';render()">${y}</button>`)
+  ].join('');
+
+  const sStats = sel==='all' ? DATA.msg_length.sent : (DATA.msg_length.by_year_sent||{})[sel];
+  const rStats = sel==='all' ? DATA.msg_length.received : (DATA.msg_length.by_year_received||{})[sel];
+  const card = (label,val,cls)=>`<div class="length-card"><div class="length-label">${label}</div><div class="length-value ${cls}">${val!=null?fmt(val):'—'}</div></div>`;
+
+  const grid = `<div class="length-grid">
+    ${card('Avg chars you send', sStats?.avg_chars, 'teal')}
+    ${card('Avg chars they send', rStats?.avg_chars, 'amber')}
+    ${card('Median chars you send', sStats?.median_chars, 'teal')}
+    ${card('Median chars they send', rStats?.median_chars, 'amber')}
+  </div>`;
+
+  return sectionHtml('msg-length', 'Message Length', 'average characters per message', `
+    <div class="panel" style="padding:12px;">
+      <div class="year-pills">${pills}</div>
+      ${grid}
+    </div>
+  `);
+}
+
+function longestMsgsHtml(){
+  const side = state.longestSide||'sent';
+  const msgs = (DATA.longest_messages[side]||[]);
+  const [expandedIdx, setExpanded] = [state.longestExpanded||{}, null];
+
+  const rows = msgs.map((m,i)=>{
+    const isExpanded = !!state.longestExpanded?.[`${side}_${i}`];
+    const dateStr = new Date(m.ts).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    const bodyHtml = isExpanded
+      ? `<div class="long-msg-preview">${esc(m.full)}</div><button class="long-msg-expand" onclick="state.longestExpanded=state.longestExpanded||{};state.longestExpanded['${side}_${i}']=false;render()">↑ Collapse</button>`
+      : `<div class="long-msg-preview">${esc(m.preview)}</div>${m.chars > 120 ? `<button class="long-msg-expand" onclick="state.longestExpanded=state.longestExpanded||{};state.longestExpanded['${side}_${i}']=true;render()">↓ Show full (${fmt(m.chars)} chars)</button>` : ''}`;
+    return `<div class="long-msg-row">
+      <div class="long-msg-meta"><span class="long-msg-chat">${esc(m.chat)}</span><span class="long-msg-date">${dateStr}</span></div>
+      ${bodyHtml}
+    </div>`;
+  }).join('');
+
+  const audBtns = `<div class="tabs">
+    <button class="tab-btn${side==='sent'?' active':''}" onclick="state.longestSide='sent';state.longestExpanded={};render()">You sent</button>
+    <button class="tab-btn${side==='received'?' active':''}" onclick="state.longestSide='received';state.longestExpanded={};render()">You received</button>
+  </div>`;
+
+  return sectionHtml('longest', 'Longest Messages', 'all-time, by character count', `
+    <div style="padding:8px 12px;">${audBtns}</div>
+    <div class="panel">${rows||'<div class="empty">No messages found.</div>'}</div>
+  `);
 }
 
 function vocabularyHtml(){
@@ -586,15 +994,28 @@ function weekStartKey(dk){
   return date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0')+'-'+String(date.getDate()).padStart(2,'0');
 }
 
-function toWeeklyAverage(dayEntries){
-  const buckets = {};
-  for(const [dk,count] of dayEntries){
-    const wk = weekStartKey(dk);
-    buckets[wk] = (buckets[wk]||0) + count;
+function tsToDateKey(ts){
+  const d = new Date(ts);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+
+function toWeeklyAverage(dayEntries, rangeStart, rangeEnd){
+  if(!dayEntries.length) return [];
+  const rangeStartDk = tsToDateKey(rangeStart);
+  const rangeEndDk = tsToDateKey(rangeEnd);
+  const buckets = {};  // wk -> {sum, days}
+  for(const [dk, count] of dayEntries){
+    if(dk < rangeStartDk || dk > rangeEndDk) continue;
+    let wk = weekStartKey(dk);
+    // Snap partial first week so Jan 1 doesn't show as Dec 31 of prior year
+    if(wk < rangeStartDk) wk = rangeStartDk;
+    if(!buckets[wk]) buckets[wk] = {sum:0, days:0};
+    buckets[wk].sum += count;
+    buckets[wk].days++;
   }
   return Object.entries(buckets)
     .sort((a,b)=>a[0]<b[0]?-1:1)
-    .map(([wk,sum])=>[wk, sum/7]);
+    .map(([wk,{sum,days}])=>[wk, sum/Math.max(1,days)]);
 }
 
 function formatAxisDate(key, multiYear){
@@ -634,77 +1055,81 @@ function drawActivityChart(dayEntries){
   const plotW = w - padSide*2, plotH = h - padTop - padBottom;
   const years = new Set(dayEntries.map(e=>e[0].slice(0,4)));
   const multiYear = years.size > 1;
+  const n = dayEntries.length;
+  const stepX = n>1 ? plotW/(n-1) : 0;
 
-  ctx.strokeStyle = '#26313C';
-  ctx.lineWidth = 1;
+  function ptX(i){ return padSide + i*stepX; }
+  function ptY(v){ return padTop + plotH - (v/maxV)*plotH; }
+
+  // Grid lines
+  ctx.strokeStyle = '#26313C'; ctx.lineWidth = 1;
   for(let i=0;i<=3;i++){
     const y = padTop + plotH*i/3;
     ctx.beginPath(); ctx.moveTo(padSide,y); ctx.lineTo(w-padSide,y); ctx.stroke();
   }
 
-  const n = dayEntries.length;
-  const stepX = n>1 ? plotW/(n-1) : 0;
-
+  // Area fill
   ctx.beginPath();
-  dayEntries.forEach((e,i)=>{
-    const x = padSide + i*stepX;
-    const y = padTop + plotH - (e[1]/maxV)*plotH;
-    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
-  });
+  dayEntries.forEach((e,i)=>{ const x=ptX(i),y=ptY(e[1]); if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); });
   const grad = ctx.createLinearGradient(0,padTop,0,padTop+plotH);
-  grad.addColorStop(0,'rgba(94,234,212,0.35)');
-  grad.addColorStop(1,'rgba(94,234,212,0.02)');
-  ctx.lineTo(padSide+(n-1)*stepX, padTop+plotH);
-  ctx.lineTo(padSide, padTop+plotH);
-  ctx.closePath();
-  ctx.fillStyle = grad;
-  ctx.fill();
+  grad.addColorStop(0,'rgba(94,234,212,0.35)'); grad.addColorStop(1,'rgba(94,234,212,0.02)');
+  ctx.lineTo(ptX(n-1),padTop+plotH); ctx.lineTo(padSide,padTop+plotH);
+  ctx.closePath(); ctx.fillStyle = grad; ctx.fill();
 
+  // Line
   ctx.beginPath();
-  dayEntries.forEach((e,i)=>{
-    const x = padSide + i*stepX;
-    const y = padTop + plotH - (e[1]/maxV)*plotH;
-    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
-  });
-  ctx.strokeStyle = '#5EEAD4';
-  ctx.lineWidth = 1.6;
-  ctx.shadowColor = 'rgba(94,234,212,0.6)';
-  ctx.shadowBlur = 4;
-  ctx.stroke();
-  ctx.shadowBlur = 0;
+  dayEntries.forEach((e,i)=>{ const x=ptX(i),y=ptY(e[1]); if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); });
+  ctx.strokeStyle = '#5EEAD4'; ctx.lineWidth = 1.6;
+  ctx.shadowColor = 'rgba(94,234,212,0.6)'; ctx.shadowBlur = 4; ctx.stroke(); ctx.shadowBlur = 0;
 
-  // x-axis date labels
+  // Axis labels
   const maxTicks = w < 500 ? 4 : 6;
   const tickIdx = pickTickIndices(n, maxTicks);
-
-  ctx.strokeStyle = '#26313C';
-  ctx.fillStyle = '#8492A0';
-  ctx.font = '10px IBM Plex Mono, monospace';
-  ctx.textBaseline = 'top';
+  ctx.strokeStyle = '#26313C'; ctx.fillStyle = '#8492A0';
+  ctx.font = '10px IBM Plex Mono, monospace'; ctx.textBaseline = 'top';
   tickIdx.forEach(i=>{
-    const x = padSide + i*stepX;
-    ctx.beginPath();
-    ctx.moveTo(x, padTop+plotH);
-    ctx.lineTo(x, padTop+plotH+4);
-    ctx.stroke();
+    const x = ptX(i);
+    ctx.beginPath(); ctx.moveTo(x,padTop+plotH); ctx.lineTo(x,padTop+plotH+4); ctx.stroke();
     const label = formatAxisDate(dayEntries[i][0], multiYear);
-    let align = 'center';
-    if(i===0) align = 'left';
-    else if(i===n-1) align = 'right';
-    ctx.textAlign = align;
+    ctx.textAlign = i===0 ? 'left' : i===n-1 ? 'right' : 'center';
     ctx.fillText(label, x, padTop+plotH+7);
   });
 
+  // Helper: draw dot at index i on top of everything
+  function drawDot(i){
+    const x=ptX(i), y=ptY(dayEntries[i][1]);
+    ctx.beginPath(); ctx.arc(x,y,4.5,0,Math.PI*2);
+    ctx.fillStyle='#5EEAD4'; ctx.shadowColor='rgba(94,234,212,0.7)'; ctx.shadowBlur=8; ctx.fill(); ctx.shadowBlur=0;
+    ctx.beginPath(); ctx.arc(x,y,2.5,0,Math.PI*2);
+    ctx.fillStyle='#0D1117'; ctx.fill();
+  }
+
+  let lastDotIdx = -1;
   canvas.onmousemove = function(e){
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     let idx = stepX>0 ? Math.round((x-padSide)/stepX) : 0;
     idx = Math.max(0, Math.min(n-1, idx));
     const [key, count] = dayEntries[idx];
-    const label = formatAxisDate(key, multiYear);
-    showTip(e, `Week of ${label} — avg ${fmt(count)}/day`);
+    showTip(e, `Week of ${formatAxisDate(key, multiYear)} — avg ${fmt(count)}/day`);
+    if(idx !== lastDotIdx){
+      lastDotIdx = idx;
+      // Quick redraw only the dot area — clear row then redraw dot
+      ctx.clearRect(padSide, padTop, plotW+10, plotH+10);
+      // Re-draw area fill
+      ctx.beginPath();
+      dayEntries.forEach((en,i)=>{ const cx=ptX(i),cy=ptY(en[1]); if(i===0) ctx.moveTo(cx,cy); else ctx.lineTo(cx,cy); });
+      ctx.lineTo(ptX(n-1),padTop+plotH); ctx.lineTo(padSide,padTop+plotH);
+      ctx.closePath(); ctx.fillStyle=grad; ctx.fill();
+      // Re-draw line
+      ctx.beginPath();
+      dayEntries.forEach((en,i)=>{ const cx=ptX(i),cy=ptY(en[1]); if(i===0) ctx.moveTo(cx,cy); else ctx.lineTo(cx,cy); });
+      ctx.strokeStyle='#5EEAD4'; ctx.lineWidth=1.6;
+      ctx.shadowColor='rgba(94,234,212,0.6)'; ctx.shadowBlur=4; ctx.stroke(); ctx.shadowBlur=0;
+      drawDot(idx);
+    }
   };
-  canvas.onmouseleave = function(){ hideTip(); };
+  canvas.onmouseleave = function(){ lastDotIdx=-1; hideTip(); };
 }
 
 function render(){
@@ -749,6 +1174,9 @@ function render(){
 
   const allTimeHtml = `
     ${yearlyComparisonHtml()}
+    ${emojiStatsHtml()}
+    ${msgLengthHtml()}
+    ${longestMsgsHtml()}
     ${vocabularyHtml()}
   `;
 
@@ -756,6 +1184,8 @@ function render(){
     <button class="main-tab${state.mainTab==='people-groups'?' active':''}" onclick="setMainTab('people-groups')">People &amp; Groups</button>
     <button class="main-tab${state.mainTab==='patterns'?' active':''}" onclick="setMainTab('patterns')">Patterns</button>
     <button class="main-tab${state.mainTab==='all-time'?' active':''}" onclick="setMainTab('all-time')">All-Time</button>
+    <div class="main-tab-divider"></div>
+    <a class="main-tab-link" href="iMessage_Dashboard_Lookup.html">Lookup ↗</a>
   </div>`;
 
   const tabContent = state.mainTab === 'people-groups' ? peopleGroupsHtml
@@ -766,8 +1196,8 @@ function render(){
     <div class="wrap">
       <div class="statement-head">
         <div>
-          <div class="eyebrow">Communications Log</div>
-          <h1>Message Statement</h1>
+          <div class="eyebrow">Your personal report</div>
+          <h1>iMessages Wrapped</h1>
           <div class="subline">${new Date(minTs).toLocaleDateString()} — ${new Date(maxTs).toLocaleDateString()} &middot; generated ${new Date(DATA.meta.generated_at).toLocaleString()}</div>
         </div>
         <div class="range-control">${rangeButtons}</div>
@@ -789,7 +1219,7 @@ function render(){
   `;
 
   if(state.mainTab === 'patterns'){
-    drawActivityChart(toWeeklyAverage(agg.dayEntries));
+    drawActivityChart(toWeeklyAverage(agg.dayEntries, range.start, range.end));
   }
   if(state.mainTab === 'all-time'){
     drawYearlyChart(computeYearlyStats());

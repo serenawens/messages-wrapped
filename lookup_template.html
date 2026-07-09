@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>Lookup — iMessages Wrapped</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#0D1117;--panel:#141B22;--panel-2:#1A232C;--border:#26313C;
+  --text:#E7EDF3;--muted:#8492A0;--teal:#5EEAD4;--amber:#F2A65A;
+  --font-display:'Space Grotesk',sans-serif;
+  --font-body:'Inter',sans-serif;
+  --font-mono:'IBM Plex Mono',monospace;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;background:var(--ink);color:var(--text);font-family:var(--font-body);}
+::selection{background:var(--teal);color:#0D1117;}
+
+.wrap{max-width:1120px;margin:0 auto;padding:28px 20px 80px;}
+
+/* Back nav */
+.back-nav{margin-bottom:18px;}
+.back-nav a{font-family:var(--font-mono);font-size:12px;color:var(--muted);text-decoration:none;}
+.back-nav a:hover{color:var(--teal);}
+
+/* Header */
+.statement-head{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:1px solid var(--border);padding-bottom:18px;margin-bottom:22px;flex-wrap:wrap;gap:16px;}
+.eyebrow{font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;color:var(--teal);text-transform:uppercase;margin-bottom:6px;}
+h1{font-family:var(--font-display);font-weight:600;font-size:30px;margin:0;letter-spacing:-0.01em;}
+.subline{font-family:var(--font-mono);color:var(--muted);font-size:12.5px;margin-top:6px;}
+
+/* Year range selector */
+.range-control{display:flex;gap:2px;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:3px;}
+.range-control button{font-family:var(--font-mono);font-size:11.5px;color:var(--muted);background:transparent;border:none;padding:7px 12px;border-radius:6px;cursor:pointer;}
+.range-control button.active{background:var(--panel-2);color:var(--teal);}
+.range-control button:hover:not(.active){color:var(--text);}
+
+/* Tabs */
+.main-tabs{display:flex;gap:28px;border-bottom:1px solid var(--border);margin-bottom:28px;}
+.main-tab{font-family:var(--font-display);font-size:15px;font-weight:600;color:var(--muted);background:transparent;border:none;padding:0 0 12px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;}
+.main-tab.active{color:var(--teal);border-bottom-color:var(--teal);}
+.main-tab:hover:not(.active){color:var(--text);}
+
+/* Panels */
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:6px;}
+.section{margin-bottom:38px;}
+.section-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;cursor:pointer;user-select:none;}
+.section-head:hover .section-title{color:var(--teal);}
+.section-head-left{display:flex;align-items:baseline;gap:8px;}
+.section-title{font-family:var(--font-display);font-size:18px;font-weight:600;}
+.section-note{font-family:var(--font-mono);font-size:11px;color:var(--muted);}
+.chevron{font-size:10px;color:var(--muted);display:inline-block;width:10px;}
+.section-head-static{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;}
+
+/* Search */
+.lookup-panel{padding:14px;}
+.lookup-search-wrap{display:flex;gap:10px;align-items:center;}
+#lookup-search,#group-search{flex:1;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font-body);font-size:14px;padding:10px 12px;}
+#lookup-search:focus,#group-search:focus{outline:none;border-color:var(--teal);}
+.lookup-clear{font-family:var(--font-mono);font-size:11px;color:var(--muted);background:transparent;border:1px solid var(--border);border-radius:6px;padding:8px 12px;cursor:pointer;}
+.lookup-clear:hover{color:var(--text);}
+.lookup-results{margin-top:10px;border-top:1px solid var(--border);}
+.lookup-result-row{padding:10px 4px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;align-items:center;gap:12px;}
+.lookup-result-row:last-child{border-bottom:none;}
+.lookup-result-row:hover{background:var(--panel-2);}
+.lookup-result-avatar{width:36px;height:36px;border-radius:50%;background:var(--panel-2);border:1px solid var(--border);object-fit:cover;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;color:var(--muted);flex-shrink:0;overflow:hidden;}
+.lookup-result-avatar img{width:100%;height:100%;object-fit:cover;}
+.lookup-result-name{font-size:14px;color:var(--text);}
+.lookup-result-sub{font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-top:2px;}
+
+/* Profile header */
+.profile-header{display:flex;align-items:center;gap:20px;margin:24px 0 16px;}
+.profile-avatar{width:64px;height:64px;border-radius:50%;background:var(--panel-2);border:2px solid var(--border);object-fit:cover;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-size:24px;font-weight:600;color:var(--muted);overflow:hidden;flex-shrink:0;}
+.profile-avatar img{width:100%;height:100%;object-fit:cover;}
+.profile-name-wrap{}
+.profile-name{font-family:var(--font-display);font-size:24px;font-weight:600;}
+.profile-sub{font-family:var(--font-mono);font-size:12px;color:var(--muted);margin-top:4px;}
+
+/* Hero stats */
+.hero-row{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:28px;}
+.hero-stat{background:var(--panel);padding:18px 20px;}
+.hero-stat .num{font-family:var(--font-mono);font-size:26px;font-weight:600;color:var(--text);line-height:1;}
+.hero-stat .num.teal{color:var(--teal);}
+.hero-stat .num.amber{color:var(--amber);}
+.hero-stat .label{font-size:11px;color:var(--muted);margin-top:8px;text-transform:uppercase;letter-spacing:.06em;}
+@media(max-width:720px){.hero-row{grid-template-columns:repeat(2,1fr);}}
+
+/* Reply cards */
+.reply-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:14px;}
+.reply-card{background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:16px;}
+.reply-label{font-family:var(--font-mono);font-size:10.5px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em;}
+.reply-value{font-family:var(--font-mono);font-size:20px;font-weight:600;}
+.reply-value.teal{color:var(--teal);}
+.reply-value.amber{color:var(--amber);}
+
+/* Rank rows */
+.rank-row{display:grid;grid-template-columns:28px 1fr 200px 64px;align-items:center;gap:12px;padding:10px 12px;border-bottom:1px solid var(--border);}
+.rank-row:last-child{border-bottom:none;}
+.rank-idx{font-family:var(--font-mono);font-size:12px;color:var(--muted);}
+.rank-name{font-size:14px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.rank-bar-track{height:6px;background:var(--panel-2);border-radius:3px;overflow:hidden;}
+.rank-bar-fill{height:100%;background:var(--teal);border-radius:3px;}
+.rank-bar-fill.amber{background:var(--amber);}
+.rank-count{font-family:var(--font-mono);font-size:13px;color:var(--text);text-align:right;}
+
+/* Hour strip */
+.hour-strip{display:grid;grid-template-columns:repeat(24,1fr);gap:2px;padding:14px;}
+.hour-cell{aspect-ratio:1;border-radius:2px;background:var(--panel-2);}
+
+/* Word/emoji chips */
+.word-cloud{display:flex;flex-wrap:wrap;gap:8px 10px;padding:14px;}
+.word-chip{font-family:var(--font-mono);color:var(--text);background:var(--panel-2);border:1px solid var(--border);border-radius:6px;padding:4px 9px;}
+.word-chip b{color:var(--teal);font-weight:600;}
+.word-chip .n{color:var(--muted);font-size:10px;margin-left:5px;}
+.emoji-cloud{display:flex;flex-wrap:wrap;gap:8px;padding:10px 14px;}
+.emoji-chip{font-size:15px;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:5px 10px;display:flex;align-items:center;gap:6px;}
+.emoji-chip .en{font-family:var(--font-mono);font-size:11px;color:var(--muted);}
+
+/* Trend chart */
+.chart-wrap{padding:16px 14px 8px;}
+
+/* GP section */
+.gp-stat{padding:16px;font-size:14px;color:var(--text);}
+.gp-num{font-family:var(--font-mono);font-size:20px;font-weight:600;color:var(--teal);margin-right:6px;}
+.gp-type-list{padding:4px 12px 8px;}
+.gp-type-row{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);}
+.gp-type-row:last-child{border-bottom:none;}
+.gp-type-name{font-size:13px;color:var(--text);flex:1;}
+.gp-type-count{font-family:var(--font-mono);font-size:12px;color:var(--muted);}
+
+/* Response pct rows */
+.pct-row{display:flex;align-items:center;gap:8px;margin-bottom:5px;font-family:var(--font-mono);font-size:11px;color:var(--muted);}
+.pct-row .k{width:34px;}
+.pct-row .bar-wrap{flex:1;height:4px;background:var(--panel);border-radius:2px;overflow:hidden;}
+.pct-row .bar-fill{height:100%;border-radius:2px;}
+.pct-row .v{width:28px;text-align:right;}
+
+.empty{padding:30px;text-align:center;color:var(--muted);font-family:var(--font-mono);font-size:12.5px;}
+
+/* Tabs for word/emoji sections */
+.tabs{display:flex;gap:4px;margin-bottom:10px;}
+.tab-btn{font-family:var(--font-mono);font-size:11px;color:var(--muted);background:var(--panel);border:1px solid var(--border);padding:6px 12px;border-radius:6px;cursor:pointer;}
+.tab-btn.active{color:var(--teal);border-color:var(--teal);}
+.tab-btn:hover:not(.active){color:var(--text);}
+.tab-row{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;}
+
+/* Length cards */
+.length-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;padding:14px;}
+.length-card{background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:14px;}
+.length-label{font-family:var(--font-mono);font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;}
+.length-value{font-family:var(--font-mono);font-size:20px;font-weight:600;}
+.length-value.teal{color:var(--teal);}
+.length-value.amber{color:var(--amber);}
+
+/* App tooltip */
+.app-tooltip{position:fixed;pointer-events:none;display:none;z-index:1000;background:var(--panel-2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-family:var(--font-mono);font-size:11px;color:var(--text);white-space:nowrap;}
+
+footer{margin-top:50px;padding-top:16px;border-top:1px solid var(--border);font-family:var(--font-mono);font-size:10.5px;color:var(--muted);}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div id="app-tooltip" class="app-tooltip"></div>
+
+<script type="text/plain" id="data-blob">__IMESSAGE_DATA__</script>
+
+<script>
+const DATA = JSON.parse(document.getElementById('data-blob').textContent);
+
+// ── Shared helpers ──────────────────────────────────────────────────────
+function fmt(n){ return Math.round(n).toLocaleString('en-US'); }
+function esc(s){ return String(s).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
+function fmtChars(n){ return n!=null ? n+' chars' : '—'; }
+function formatDuration(ms){
+  if(ms==null) return '—';
+  const mins=ms/60000;
+  if(mins<1) return '<1m';
+  if(mins<60) return Math.round(mins)+'m';
+  const h=Math.floor(mins/60), m=Math.round(mins-h*60);
+  if(h<24) return m>0?`${h}h ${m}m`:`${h}h`;
+  return Math.round(h/24)+'d';
+}
+function formatHour(h){ const p=h<12?'AM':'PM',d=h%12||12; return `${d} ${p}`; }
+
+// Tooltip
+function showTip(e,text){ const t=document.getElementById('app-tooltip'); if(!t)return; t.textContent=text; t.style.left=(e.clientX+14)+'px'; t.style.top=(e.clientY+14)+'px'; t.style.display='block'; }
+function moveTip(e){ const t=document.getElementById('app-tooltip'); if(t&&t.style.display==='block'){t.style.left=(e.clientX+14)+'px';t.style.top=(e.clientY+14)+'px';} }
+function hideTip(){ const t=document.getElementById('app-tooltip'); if(t) t.style.display='none'; }
+
+// Collapsible sections
+const collapseState = {};
+function toggleSection(id){ collapseState[id]=!collapseState[id]; render(); }
+function sectionHtml(id,title,note,body){
+  const c=!!collapseState[id];
+  return `<div class="section">
+    <div class="section-head" onclick="toggleSection('${id}')">
+      <div class="section-head-left"><span class="chevron">${c?'&#9656;':'&#9662;'}</span><div class="section-title">${title}</div></div>
+      <div class="section-note">${note}</div>
+    </div>
+    ${c?'':body}
+  </div>`;
+}
+
+// ── Date range ──────────────────────────────────────────────────────────
+const YEARS = [...new Set(Object.values(DATA.person_profiles||{})
+  .flatMap(p=>Object.keys(p.monthly_sent||{})).map(k=>k.slice(0,4)))].sort();
+const state = {
+  tab: 'person', rangeKey: 'all',
+  personQuery: '', personId: null,
+  groupQuery: '', groupId: null,
+  personVocabAud: 'overall', personWordTab: 'words',
+};
+
+function rangeFor(key, minTs, maxTs){
+  if(key==='all') return {start:minTs, end:maxTs};
+  const y=parseInt(key,10);
+  return {start:new Date(y,0,1).getTime(), end:new Date(y,11,31,23,59,59,999).getTime()};
+}
+
+// Contact photo helper
+function photoSrc(id){ return DATA.contact_photos&&DATA.contact_photos[id]?`data:image/jpeg;base64,${DATA.contact_photos[id]}`:null; }
+function avatarHtml(id,size='36px'){
+  const src=photoSrc(id);
+  const name=DATA.handles[id]||'';
+  const initials=(name.split(' ').map(w=>w[0]||'').join('').slice(0,2)||'?').toUpperCase();
+  if(src) return `<div class="profile-avatar" style="width:${size};height:${size}"><img src="${src}" alt="${esc(name)}"/></div>`;
+  return `<div class="profile-avatar" style="width:${size};height:${size}">${esc(initials)}</div>`;
+}
+
+// ── Person Lookup ───────────────────────────────────────────────────────
+function filterPersonMessages(monthlyObj, start, end){
+  let total=0;
+  for(const [mk,cnt] of Object.entries(monthlyObj||{})){
+    const d=new Date(mk+'-01');
+    if(d.getTime()>=start && d.getTime()<=end) total+=cnt;
+  }
+  return total;
+}
+
+function personProfileHtml(pid){
+  const p=DATA.person_profiles[pid]||{};
+  const name=DATA.handles[pid]||pid;
+  const addrs=(DATA.handle_contacts[pid]||[]).filter(a=>a!==name).join(', ');
+  const range=rangeFor(state.rangeKey, DATA.meta.date_min, DATA.meta.date_max);
+
+  const sentInRange=filterPersonMessages(p.monthly_sent, range.start, range.end);
+  const recvInRange=filterPersonMessages(p.monthly_received, range.start, range.end);
+  const totalInRange=sentInRange+recvInRange;
+  const hourCounts=p.hour_counts||Array(24).fill(0);
+  const peakH=hourCounts.indexOf(Math.max(...hourCounts));
+
+  // Activity trend
+  const trendHtml=`<div class="chart-wrap"><canvas id="person-trend-canvas" style="width:100%;height:140px;"></canvas></div>`;
+
+  // Hour strip
+  const hMax=Math.max(...hourCounts,1);
+  const hourStrip=hourCounts.map((v,h)=>{
+    const a=(0.06+(v/hMax)*0.85).toFixed(3);
+    const tip=`${formatHour(h)} — ${fmt(v)} messages`;
+    return `<div class="hour-cell" style="background:rgba(94,234,212,${a})" data-tip="${esc(tip)}" onmouseenter="showTip(event,this.dataset.tip)" onmousemove="moveTip(event)" onmouseleave="hideTip()"></div>`;
+  }).join('');
+  const hourLabels=['12a','','','3a','','','6a','','','9a','','','12p','','','3p','','','6p','','','9p','',''].map(l=>`<div style="text-align:center;font-family:var(--font-mono);font-size:8px;color:var(--muted)">${l}</div>`).join('');
+
+  // Vocab
+  const words=p.top_words||[];
+  const phrases=p.top_phrases||[];
+  const wordSrc=state.personWordTab==='words'?words:phrases;
+  const wordCloud=wordSrc.length
+    ? `<div class="word-cloud">`+wordSrc.slice(0,20).map(([w,c])=>`<div class="word-chip"><b>${esc(w)}</b><span class="n">${fmt(c)}</span></div>`).join('')+`</div>`
+    : '<div class="empty">Not enough messages for word analysis.</div>';
+
+  // Emojis
+  const emojiSrc=state.personEmojiAud==='sent'?p.emojis_sent||[]:state.personEmojiAud==='received'?p.emojis_received||[]:
+    [...((p.emojis_sent||[]).map(([e,c])=>([e,c,'s']))), ...((p.emojis_received||[]).map(([e,c])=>([e,c,'r'])))].reduce((acc,[e,c])=>{const i=acc.findIndex(x=>x[0]===e);if(i>=0)acc[i][1]+=c;else acc.push([e,c]);return acc;},[]).sort((a,b)=>b[1]-a[1]);
+  const emojiCloud=emojiSrc.length
+    ? `<div class="emoji-cloud">`+emojiSrc.slice(0,15).map(([e,c])=>`<div class="emoji-chip">${esc(e)}<span class="en">${fmt(c)}</span></div>`).join('')+`</div>`
+    : '<div class="empty">No emoji found.</div>';
+
+  // Reply time pcts
+  function pctBarHtml(pcts,cls){
+    if(!pcts||!Object.keys(pcts).length) return '<div class="empty" style="padding:10px">Not enough data.</div>';
+    return Object.entries(pcts).map(([k,v])=>`<div class="pct-row">
+      <span class="k">${esc(k)}</span>
+      <div class="bar-wrap"><div class="bar-fill ${cls}" style="width:${v}%"></div></div>
+      <span class="v">${v}%</span>
+    </div>`).join('');
+  }
+
+  // GP
+  const gpTypes=p.game_pigeon_types||[];
+  const gpBlock=p.game_pigeon>=5
+    ? `<div class="gp-stat"><span class="gp-num">${fmt(p.game_pigeon)}</span> Game Pigeon messages in this 1:1</div>
+       ${gpTypes.length?`<div class="gp-type-list">`+gpTypes.map(([g,c])=>`<div class="gp-type-row"><div class="gp-type-name">${esc(g)}</div><div class="gp-type-count">${fmt(c)}</div></div>`).join('')+`</div>`:''}`
+    : '<div class="empty">Not much Game Pigeon activity together.</div>';
+
+  const gcHtml=(p.group_chats||[]).length
+    ? (p.group_chats||[]).map((g,i)=>{
+        const mx=(p.group_chats[0]||{}).count||1;
+        const pct=Math.max(4,g.count/mx*100);
+        return `<div class="rank-row">
+          <div class="rank-idx">${String(i+1).padStart(2,'0')}</div>
+          <div class="rank-name">${esc(g.name)}</div>
+          <div class="rank-bar-track"><div class="rank-bar-fill" style="width:${pct}%"></div></div>
+          <div class="rank-count">${fmt(g.count)}</div>
+        </div>`;
+      }).join('')
+    : '<div class="empty">Not in any group chats together.</div>';
+
+  return `
+    <div class="profile-header">
+      ${avatarHtml(pid,'64px')}
+      <div class="profile-name-wrap">
+        <div class="profile-name">${esc(name)}</div>
+        ${addrs?`<div class="profile-sub">${esc(addrs)}</div>`:''}
+      </div>
+    </div>
+
+    <div class="hero-row">
+      <div class="hero-stat"><div class="num teal">${fmt(totalInRange)}</div><div class="label">1:1 messages${state.rangeKey!=='all'?' ('+state.rangeKey+')':''}</div></div>
+      <div class="hero-stat"><div class="num">${fmt(sentInRange)}</div><div class="label">You sent</div></div>
+      <div class="hero-stat"><div class="num amber">${fmt(recvInRange)}</div><div class="label">They sent</div></div>
+      <div class="hero-stat"><div class="num">${formatHour(peakH)}</div><div class="label">They usually text</div></div>
+    </div>
+
+    ${sectionHtml('p-trend','Activity Trend','1:1 messages by month · filtered by range',trendHtml)}
+
+    ${sectionHtml('p-reply','Reply Times','burst-based · 1:1 only · all-time',`
+      <div class="reply-grid">
+        <div class="reply-card">
+          <div class="reply-label">Your median reply</div>
+          <div class="reply-value teal">${formatDuration(p.your_response_ms)}</div>
+          <div style="margin-top:12px;">${pctBarHtml(p.your_response_pcts,'teal')}</div>
+        </div>
+        <div class="reply-card">
+          <div class="reply-label">Their median reply</div>
+          <div class="reply-value amber">${formatDuration(p.their_response_ms)}</div>
+          <div style="margin-top:12px;">${pctBarHtml(p.their_response_pcts,'amber')}</div>
+        </div>
+      </div>
+    `)}
+
+    ${sectionHtml('p-hours','When They Text','across all shared chats · all-time',`<div class="panel">
+      <div class="hour-strip">${hourStrip}</div>
+      <div style="display:grid;grid-template-columns:repeat(24,1fr);padding:0 14px 8px">${hourLabels}</div>
+    </div>`)}
+
+    ${sectionHtml('p-words','Top Words & Phrases','1:1 conversation · all-time',`
+      <div style="padding:8px 12px 0">
+        <div class="tabs">
+          <button class="tab-btn${state.personWordTab==='words'?' active':''}" onclick="state.personWordTab='words';render()">Words</button>
+          <button class="tab-btn${state.personWordTab==='phrases'?' active':''}" onclick="state.personWordTab='phrases';render()">Phrases</button>
+        </div>
+      </div>
+      <div class="panel">${wordCloud}</div>
+    `)}
+
+    ${sectionHtml('p-emoji','Emoji','1:1 conversation · all-time',`
+      <div style="padding:8px 12px 0">
+        <div class="tabs">
+          <button class="tab-btn${(state.personEmojiAud||'overall')==='overall'?' active':''}" onclick="state.personEmojiAud='overall';render()">Overall</button>
+          <button class="tab-btn${state.personEmojiAud==='sent'?' active':''}" onclick="state.personEmojiAud='sent';render()">You sent</button>
+          <button class="tab-btn${state.personEmojiAud==='received'?' active':''}" onclick="state.personEmojiAud='received';render()">They sent</button>
+        </div>
+      </div>
+      <div class="panel">${emojiCloud}</div>
+    `)}
+
+    ${p.avg_chars_sent ? sectionHtml('p-len','Message Length','1:1 · all-time',`
+      <div class="length-grid">
+        <div class="length-card"><div class="length-label">Your avg length</div><div class="length-value teal">${fmtChars(p.avg_chars_sent)}</div></div>
+        <div class="length-card"><div class="length-label">Their avg length</div><div class="length-value amber">${fmtChars(p.avg_chars_received)}</div></div>
+      </div>
+    `) : ''}
+
+    ${sectionHtml('p-groups','Shared Group Chats','all-time',`<div class="panel">${gcHtml}</div>`)}
+    ${sectionHtml('p-gp','Game Pigeon','1:1 only · all-time',`<div class="panel">${gpBlock}</div>`)}
+  `;
+}
+
+// ── Group Chat Lookup ───────────────────────────────────────────────────
+function groupProfileHtml(gid){
+  const g=DATA.chat_profiles[gid]||{};
+  const chat=DATA.chats[gid]||{};
+  const range=rangeFor(state.rangeKey, DATA.meta.date_min, DATA.meta.date_max);
+
+  // Sender breakdown
+  const senders=(g.sender_counts||[]).map(([pid,cnt],i)=>{
+    const name=DATA.handles[pid]||pid;
+    const mx=(g.sender_counts[0]||[])[1]||1;
+    const pct=Math.max(4,cnt/mx*100);
+    return `<div class="rank-row">
+      <div class="rank-idx">${String(i+1).padStart(2,'0')}</div>
+      <div class="rank-name">${esc(name)}</div>
+      <div class="rank-bar-track"><div class="rank-bar-fill" style="width:${pct}%"></div></div>
+      <div class="rank-count">${fmt(cnt)}</div>
+    </div>`;
+  }).join('');
+
+  const hourCounts=g.hour_counts||Array(24).fill(0);
+  const hMax=Math.max(...hourCounts,1);
+  const hourStrip=hourCounts.map((v,h)=>{
+    const a=(0.06+(v/hMax)*0.85).toFixed(3);
+    const tip=`${formatHour(h)} — ${fmt(v)} messages`;
+    return `<div class="hour-cell" style="background:rgba(94,234,212,${a})" data-tip="${esc(tip)}" onmouseenter="showTip(event,this.dataset.tip)" onmousemove="moveTip(event)" onmouseleave="hideTip()"></div>`;
+  }).join('');
+  const hourLabels=['12a','','','3a','','','6a','','','9a','','','12p','','','3p','','','6p','','','9p','',''].map(l=>`<div style="text-align:center;font-family:var(--font-mono);font-size:8px;color:var(--muted)">${l}</div>`).join('');
+
+  const words=g.top_words||[];
+  const phrases=g.top_phrases||[];
+  const wordCloud=words.length
+    ? `<div class="word-cloud">`+words.slice(0,20).map(([w,c])=>`<div class="word-chip"><b>${esc(w)}</b><span class="n">${fmt(c)}</span></div>`).join('')+`</div>`
+    : '<div class="empty">Not enough text messages for word analysis.</div>';
+  const phraseCloud=phrases.length
+    ? `<div class="word-cloud">`+phrases.slice(0,15).map(([w,c])=>`<div class="word-chip"><b>${esc(w)}</b><span class="n">${fmt(c)}</span></div>`).join('')+`</div>`
+    : '<div class="empty">Not enough phrases to analyze.</div>';
+
+  const emojis=g.top_emojis||[];
+  const emojiCloud=emojis.length
+    ? `<div class="emoji-cloud">`+emojis.map(([e,c])=>`<div class="emoji-chip">${esc(e)}<span class="en">${fmt(c)}</span></div>`).join('')+`</div>`
+    : '<div class="empty">No emoji found.</div>';
+
+  const trendHtml=`<div class="chart-wrap"><canvas id="group-trend-canvas" style="width:100%;height:140px;"></canvas></div>`;
+
+  return `
+    <div class="profile-header">
+      <div class="profile-avatar" style="width:64px;height:64px;font-size:20px">💬</div>
+      <div class="profile-name-wrap">
+        <div class="profile-name">${esc(g.name||chat.name||'Group Chat')}</div>
+        <div class="profile-sub">${(chat.participants||[]).length+1} members · ${fmt(g.total||0)} messages all-time</div>
+      </div>
+    </div>
+
+    <div class="hero-row">
+      <div class="hero-stat"><div class="num teal">${fmt(g.total||0)}</div><div class="label">Total messages</div></div>
+      <div class="hero-stat"><div class="num">${fmt((chat.participants||[]).length+1)}</div><div class="label">Members</div></div>
+      <div class="hero-stat"><div class="num">${(g.sender_counts||[]).length?esc(DATA.handles[(g.sender_counts[0]||[])[0]]||'—'):'—'}</div><div class="label">Most active</div></div>
+      <div class="hero-stat"><div class="num">${formatHour(hourCounts.indexOf(Math.max(...hourCounts)))}</div><div class="label">Peak hour</div></div>
+    </div>
+
+    ${sectionHtml('g-trend','Activity Trend','messages per month · all-time',trendHtml)}
+
+    ${sectionHtml('g-senders','Who Sends Most','all-time message count',`<div class="panel">${senders||'<div class="empty">No data.</div>'}</div>`)}
+
+    ${sectionHtml('g-hours','Peak Hours','messages by hour of day',`<div class="panel">
+      <div class="hour-strip">${hourStrip}</div>
+      <div style="display:grid;grid-template-columns:repeat(24,1fr);padding:0 14px 8px">${hourLabels}</div>
+    </div>`)}
+
+    ${sectionHtml('g-words','Top Words & Phrases','all-time',`
+      <div style="padding:8px 12px 0">
+        <div class="tabs">
+          <button class="tab-btn${(state.groupWordTab||'words')==='words'?' active':''}" onclick="state.groupWordTab='words';render()">Words</button>
+          <button class="tab-btn${state.groupWordTab==='phrases'?' active':''}" onclick="state.groupWordTab='phrases';render()">Phrases</button>
+        </div>
+      </div>
+      <div class="panel">${state.groupWordTab==='phrases'?phraseCloud:wordCloud}</div>
+    `)}
+
+    ${sectionHtml('g-emoji','Emoji','all-time',`<div class="panel">${emojiCloud}</div>`)}
+  `;
+}
+
+// ── Canvas trend chart ──────────────────────────────────────────────────
+function drawTrend(canvasId, monthlyData, color){
+  const canvas=document.getElementById(canvasId);
+  if(!canvas) return;
+  const ctx=canvas.getContext('2d');
+  if(!ctx) return;
+  const dpr=window.devicePixelRatio||1;
+  const w=canvas.clientWidth, h=canvas.clientHeight;
+  canvas.width=w*dpr; canvas.height=h*dpr;
+  ctx.scale(dpr,dpr);
+  ctx.clearRect(0,0,w,h);
+  const entries=Object.entries(monthlyData||{}).sort((a,b)=>a[0]<b[0]?-1:1);
+  if(!entries.length) return;
+  const vals=entries.map(e=>e[1]);
+  const maxV=Math.max(...vals,1);
+  const padS=10,padT=8,padB=20;
+  const pw=w-padS*2,ph=h-padT-padB;
+  const n=entries.length;
+  const sx=n>1?pw/(n-1):0;
+  const ptX=i=>padS+i*sx;
+  const ptY=v=>padT+ph-(v/maxV)*ph;
+
+  ctx.strokeStyle='#26313C';ctx.lineWidth=1;
+  for(let i=0;i<=2;i++){const y=padT+ph*i/2;ctx.beginPath();ctx.moveTo(padS,y);ctx.lineTo(w-padS,y);ctx.stroke();}
+
+  ctx.beginPath();
+  entries.forEach((e,i)=>{const x=ptX(i),y=ptY(e[1]);if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});
+  const grad=ctx.createLinearGradient(0,padT,0,padT+ph);
+  grad.addColorStop(0,color.replace(')',',0.35)').replace('rgb','rgba'));
+  grad.addColorStop(1,color.replace(')',',0.02)').replace('rgb','rgba'));
+  ctx.lineTo(ptX(n-1),padT+ph);ctx.lineTo(padS,padT+ph);ctx.closePath();ctx.fillStyle=grad;ctx.fill();
+
+  ctx.beginPath();
+  entries.forEach((e,i)=>{const x=ptX(i),y=ptY(e[1]);if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});
+  ctx.strokeStyle=color;ctx.lineWidth=1.6;
+  ctx.shadowColor=color.replace(')',',0.5)').replace('rgb','rgba');ctx.shadowBlur=4;ctx.stroke();ctx.shadowBlur=0;
+
+  ctx.fillStyle='#8492A0';ctx.font='9px IBM Plex Mono,monospace';ctx.textBaseline='top';
+  const ticks=n<=12?entries.map((_,i)=>i):entries.reduce((a,_,i,arr)=>{if(i===0||i===arr.length-1||(i%(Math.floor(n/5)))===0)a.push(i);return a;},[]);
+  ticks.forEach(i=>{
+    const label=entries[i][0].slice(0,7);
+    ctx.textAlign=i===0?'left':i===n-1?'right':'center';
+    ctx.fillText(label,ptX(i),padT+ph+4);
+  });
+
+  let lastDot=-1;
+  canvas.onmousemove=function(e){
+    const rect=canvas.getBoundingClientRect();const x=e.clientX-rect.left;
+    let idx=sx>0?Math.round((x-padS)/sx):0;idx=Math.max(0,Math.min(n-1,idx));
+    showTip(e,`${entries[idx][0]} — ${fmt(entries[idx][1])} messages`);
+    if(idx!==lastDot){lastDot=idx;
+      ctx.clearRect(0,0,w,h);
+      // redraw gridlines
+      ctx.strokeStyle='#26313C';ctx.lineWidth=1;
+      for(let i=0;i<=2;i++){const y=padT+ph*i/2;ctx.beginPath();ctx.moveTo(padS,y);ctx.lineTo(w-padS,y);ctx.stroke();}
+      // area
+      ctx.beginPath();entries.forEach((en,i)=>{const cx=ptX(i),cy=ptY(en[1]);if(i===0)ctx.moveTo(cx,cy);else ctx.lineTo(cx,cy);});
+      ctx.lineTo(ptX(n-1),padT+ph);ctx.lineTo(padS,padT+ph);ctx.closePath();ctx.fillStyle=grad;ctx.fill();
+      // line
+      ctx.beginPath();entries.forEach((en,i)=>{const cx=ptX(i),cy=ptY(en[1]);if(i===0)ctx.moveTo(cx,cy);else ctx.lineTo(cx,cy);});
+      ctx.strokeStyle=color;ctx.lineWidth=1.6;ctx.shadowColor=color.replace(')',',0.5)').replace('rgb','rgba');ctx.shadowBlur=4;ctx.stroke();ctx.shadowBlur=0;
+      // dot
+      const dx=ptX(idx),dy=ptY(entries[idx][1]);
+      ctx.beginPath();ctx.arc(dx,dy,4.5,0,Math.PI*2);ctx.fillStyle=color;ctx.shadowBlur=8;ctx.fill();ctx.shadowBlur=0;
+      ctx.beginPath();ctx.arc(dx,dy,2.5,0,Math.PI*2);ctx.fillStyle='#0D1117';ctx.fill();
+    }
+  };
+  canvas.onmouseleave=function(){lastDot=-1;hideTip();};
+}
+
+// ── Main render ─────────────────────────────────────────────────────────
+function render(){
+  const minTs=DATA.meta.date_min, maxTs=DATA.meta.date_max;
+  const years=[...new Set(Object.values(DATA.person_profiles||{}).flatMap(p=>Object.keys(p.monthly_sent||{})).map(k=>k.slice(0,4)))].sort((a,b)=>b-a);
+  const rangeButtons=[{key:'all',label:'All time'},...years.map(y=>({key:y,label:y}))].map(r=>
+    `<button class="${state.rangeKey===r.key?'active':''}" onclick="state.rangeKey='${r.key}';render()">${r.label}</button>`
+  ).join('');
+
+  // Build person search results
+  const pq=(state.personQuery||'').trim().toLowerCase();
+  let personResults=[];
+  if(!state.personId&&pq){
+    personResults=Object.entries(DATA.handles).filter(([id,name])=>{
+      if(name.toLowerCase().includes(pq)) return true;
+      return (DATA.handle_contacts[id]||[]).some(a=>a.toLowerCase().includes(pq));
+    }).slice(0,8);
+  }
+
+  // Build group chat search results
+  const gq=(state.groupQuery||'').trim().toLowerCase();
+  let groupResults=[];
+  if(!state.groupId&&gq){
+    groupResults=Object.entries(DATA.chat_profiles||{}).filter(([id,p])=>p.name.toLowerCase().includes(gq)).slice(0,8);
+  }
+
+  const personTabHtml=`
+    <div class="section">
+      <div class="section-head-static"><div class="section-title">Person Lookup</div><div class="section-note">search by name, number, or email</div></div>
+      <div class="panel lookup-panel">
+        <div class="lookup-search-wrap">
+          <input id="lookup-search" type="text" placeholder="Search a name, number, or email…"
+            value="${esc(state.personQuery||'')}" oninput="state.personQuery=this.value;state.personId=null;state._focusPerson=true;state._personCursor=this.selectionStart;render()" />
+          ${state.personId?`<button class="lookup-clear" onclick="state.personId=null;state.personQuery='';state._focusPerson=true;render()">Clear</button>`:''}
+        </div>
+        ${personResults.length?`<div class="lookup-results">`+personResults.map(([id,name])=>`
+          <div class="lookup-result-row" onclick="state.personId='${id}';state.personQuery='${esc(name)}';render()">
+            ${avatarHtml(id,'36px')}
+            <div><div class="lookup-result-name">${esc(name)}</div>
+            <div class="lookup-result-sub">${esc((DATA.handle_contacts[id]||[]).join(', '))}</div></div>
+          </div>`).join('')+`</div>`:pq?`<div class="empty">No matches.</div>`:''}
+      </div>
+    </div>
+    ${state.personId?personProfileHtml(state.personId):''}
+  `;
+
+  const groupTabHtml=`
+    <div class="section">
+      <div class="section-head-static"><div class="section-title">Group Chat Lookup</div><div class="section-note">search by group name</div></div>
+      <div class="panel lookup-panel">
+        <div class="lookup-search-wrap">
+          <input id="group-search" type="text" placeholder="Search a group chat name…"
+            value="${esc(state.groupQuery||'')}" oninput="state.groupQuery=this.value;state.groupId=null;state._focusGroup=true;render()" />
+          ${state.groupId?`<button class="lookup-clear" onclick="state.groupId=null;state.groupQuery='';state._focusGroup=true;render()">Clear</button>`:''}
+        </div>
+        ${groupResults.length?`<div class="lookup-results">`+groupResults.map(([id,p])=>`
+          <div class="lookup-result-row" onclick="state.groupId='${id}';state.groupQuery='${esc(p.name)}';render()">
+            <div class="lookup-result-avatar" style="font-size:18px">💬</div>
+            <div><div class="lookup-result-name">${esc(p.name)}</div>
+            <div class="lookup-result-sub">${fmt(p.total)} messages · ${(DATA.chats[id]||{}).participants?.length+1||'?'} members</div></div>
+          </div>`).join('')+`</div>`:gq?`<div class="empty">No matches.</div>`:''}
+      </div>
+    </div>
+    ${state.groupId?groupProfileHtml(state.groupId):''}
+  `;
+
+  document.getElementById('root').innerHTML=`
+    <div class="wrap">
+      <div class="back-nav"><a href="iMessage_Dashboard.html">← Back to Dashboard</a></div>
+      <div class="statement-head">
+        <div>
+          <div class="eyebrow">Your personal report</div>
+          <h1>iMessages Wrapped</h1>
+          <div style="font-family:var(--font-mono);font-size:13px;color:var(--teal);margin-top:2px;">Lookup</div>
+          <div class="subline">${new Date(minTs).toLocaleDateString()} — ${new Date(maxTs).toLocaleDateString()}</div>
+        </div>
+        <div class="range-control">${rangeButtons}</div>
+      </div>
+
+      <div class="main-tabs">
+        <button class="main-tab${state.tab==='person'?' active':''}" onclick="state.tab='person';render()">Person</button>
+        <button class="main-tab${state.tab==='group'?' active':''}" onclick="state.tab='group';render()">Group Chat</button>
+      </div>
+
+      ${state.tab==='person'?personTabHtml:groupTabHtml}
+
+      <footer>Lookup page. Data was extracted locally by build_dashboard.py and never left your machine.</footer>
+    </div>
+  `;
+
+  // Focus management for search inputs
+  if(state._focusPerson&&state.tab==='person'){
+    const inp=document.getElementById('lookup-search');
+    if(inp){inp.focus();if(state._personCursor!=null)inp.setSelectionRange(state._personCursor,state._personCursor);}
+    state._focusPerson=false;
+  }
+  if(state._focusGroup&&state.tab==='group'){
+    const inp=document.getElementById('group-search');
+    if(inp) inp.focus();
+    state._focusGroup=false;
+  }
+
+  // Draw trend charts
+  if(state.personId&&!collapseState['p-trend']){
+    const p=DATA.person_profiles[state.personId]||{};
+    const range=rangeFor(state.rangeKey,DATA.meta.date_min,DATA.meta.date_max);
+    const filtered={};
+    for(const [mk,cnt] of Object.entries({...(p.monthly_sent||{})})){
+      if(new Date(mk+'-01').getTime()>=range.start) filtered[mk]=(filtered[mk]||0)+cnt;
+    }
+    for(const [mk,cnt] of Object.entries({...(p.monthly_received||{})})){
+      if(new Date(mk+'-01').getTime()>=range.start) filtered[mk]=(filtered[mk]||0)+cnt;
+    }
+    requestAnimationFrame(()=>drawTrend('person-trend-canvas',filtered,'rgb(94,234,212)'));
+  }
+  if(state.groupId&&!collapseState['g-trend']){
+    const g=DATA.chat_profiles[state.groupId]||{};
+    requestAnimationFrame(()=>drawTrend('group-trend-canvas',g.activity_by_month||{},'rgb(242,166,90)'));
+  }
+}
+
+render();
+</script>
+</body>
+</html>
