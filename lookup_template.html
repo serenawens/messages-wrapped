@@ -26,7 +26,7 @@ html,body{margin:0;padding:0;background:var(--ink);color:var(--text);font-family
 .back-nav a:hover{color:var(--teal);}
 
 /* Header */
-.statement-head{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:1px solid var(--border);padding-bottom:18px;margin-bottom:22px;flex-wrap:wrap;gap:16px;}
+.statement-head{position:sticky;top:0;z-index:100;background:var(--ink);display:flex;justify-content:space-between;align-items:flex-end;border-bottom:1px solid var(--border);padding-bottom:18px;padding-top:12px;margin-bottom:22px;flex-wrap:wrap;gap:16px;}
 .eyebrow{font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;color:var(--teal);text-transform:uppercase;margin-bottom:6px;}
 h1{font-family:var(--font-display);font-weight:600;font-size:30px;margin:0;letter-spacing:-0.01em;}
 .subline{font-family:var(--font-mono);color:var(--muted);font-size:12.5px;margin-top:6px;}
@@ -157,6 +157,14 @@ h1{font-family:var(--font-display);font-weight:600;font-size:30px;margin:0;lette
 /* App tooltip */
 .app-tooltip{position:fixed;pointer-events:none;display:none;z-index:1000;background:var(--panel-2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-family:var(--font-mono);font-size:11px;color:var(--text);white-space:nowrap;}
 
+/* Split rank bar (for sent/received + shared group chat both-count bars) */
+.rank-bar-fill-wrap{display:flex;height:100%;}
+
+/* Stacked chart legend */
+.chart-legend{display:flex;flex-wrap:wrap;gap:5px 12px;padding:4px 14px 10px;font-family:var(--font-mono);font-size:10px;color:var(--muted);}
+.chart-legend-item{display:flex;align-items:center;gap:5px;}
+.chart-legend-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+
 footer{margin-top:50px;padding-top:16px;border-top:1px solid var(--border);font-family:var(--font-mono);font-size:10.5px;color:var(--muted);}
 </style>
 </head>
@@ -201,6 +209,33 @@ function sectionHtml(id,title,note,body){
     </div>
     ${c?'':body}
   </div>`;
+}
+
+// ── Time-of-day bucket helper ────────────────────────────────────────────
+function textingBucket(hourCounts){
+  if(!hourCounts||!hourCounts.length) return '—';
+  const buckets=[
+    {label:'Late Night',h:[0,1,2,3,4,5]},
+    {label:'Morning',h:[6,7,8,9,10,11]},
+    {label:'Afternoon',h:[12,13,14,15,16]},
+    {label:'Evening',h:[17,18,19,20,21,22,23]},
+  ];
+  const totals=buckets.map(b=>b.h.reduce((s,h)=>s+(hourCounts[h]||0),0));
+  const max=Math.max(...totals);
+  if(!max) return '—';
+  return buckets[totals.indexOf(max)].label;
+}
+
+// Fill all 12 months of a specific year with 0 for missing months
+function fillYearMonths(filteredData, rangeKey){
+  if(rangeKey==='all') return filteredData;
+  const y=parseInt(rangeKey,10);
+  const result={};
+  for(let m=1;m<=12;m++){
+    const mk=y+'-'+String(m).padStart(2,'0');
+    result[mk]=filteredData[mk]||0;
+  }
+  return result;
 }
 
 // ── Date range ──────────────────────────────────────────────────────────
@@ -250,9 +285,11 @@ function personProfileHtml(pid){
   const totalInRange=sentInRange+recvInRange;
   const hourCounts=p.hour_counts||Array(24).fill(0);
   const peakH=hourCounts.indexOf(Math.max(...hourCounts));
+  const bucket=textingBucket(hourCounts);
 
   // Activity trend
-  const trendHtml=`<div class="chart-wrap"><canvas id="person-trend-canvas" style="width:100%;height:140px;"></canvas></div>`;
+  const rangeLabelP=state.rangeKey==='all'?'All Time':state.rangeKey;
+  const trendHtml=`<div style="padding:8px 14px 0;font-family:var(--font-mono);font-size:11px;color:var(--muted);">${rangeLabelP}</div><div class="chart-wrap"><canvas id="person-trend-canvas" style="width:100%;height:140px;"></canvas></div>`;
 
   // Hour strip
   const hMax=Math.max(...hourCounts,1);
@@ -261,7 +298,7 @@ function personProfileHtml(pid){
     const tip=`${formatHour(h)} — ${fmt(v)} messages`;
     return `<div class="hour-cell" style="background:rgba(94,234,212,${a})" data-tip="${esc(tip)}" onmouseenter="showTip(event,this.dataset.tip)" onmousemove="moveTip(event)" onmouseleave="hideTip()"></div>`;
   }).join('');
-  const hourLabels=['12a','','','3a','','','6a','','','9a','','','12p','','','3p','','','6p','','','9p','',''].map(l=>`<div style="text-align:center;font-family:var(--font-mono);font-size:8px;color:var(--muted)">${l}</div>`).join('');
+  const hourLabels=['12 AM','','','3 AM','','','6 AM','','','9 AM','','','12 PM','','','3 PM','','','6 PM','','','9 PM','',''].map(l=>`<div style="text-align:center;font-family:var(--font-mono);font-size:7px;color:var(--muted)">${l}</div>`).join('');
 
   // Vocab
   const words=p.top_words||[];
@@ -295,17 +332,40 @@ function personProfileHtml(pid){
        ${gpTypes.length?`<div class="gp-type-list">`+gpTypes.map(([g,c])=>`<div class="gp-type-row"><div class="gp-type-name">${esc(g)}</div><div class="gp-type-count">${fmt(c)}</div></div>`).join('')+`</div>`:''}`
     : '<div class="empty">Not much Game Pigeon activity together.</div>';
 
+  const gcRange=rangeFor(state.rangeKey, DATA.meta.date_min, DATA.meta.date_max);
   const gcHtml=(p.group_chats||[]).length
-    ? (p.group_chats||[]).map((g,i)=>{
-        const mx=(p.group_chats[0]||{}).count||1;
-        const pct=Math.max(4,g.count/mx*100);
-        return `<div class="rank-row">
-          <div class="rank-idx">${String(i+1).padStart(2,'0')}</div>
-          <div class="rank-name">${esc(g.name)}</div>
-          <div class="rank-bar-track"><div class="rank-bar-fill" style="width:${pct}%"></div></div>
-          <div class="rank-count">${fmt(g.count)}</div>
-        </div>`;
-      }).join('')
+    ? (()=>{
+        // Compute range-filtered totals; fall back to all-time counts if no monthly data
+        const withTotals=(p.group_chats||[]).map(g=>{
+          if(g.their_monthly!=null){
+            const their=filterPersonMessages(g.their_monthly||{},gcRange.start,gcRange.end);
+            const your=filterPersonMessages(g.your_monthly||{},gcRange.start,gcRange.end);
+            return {...g,theirR:their,yourR:your,combined:their+your};
+          }
+          const their=g.count||0, your=g.your_count||0;
+          return {...g,theirR:their,yourR:your,combined:their+your};
+        }).sort((a,b)=>b.combined-a.combined);
+        const mx=Math.max(...withTotals.map(x=>x.combined),1);
+        return withTotals.map((g,i)=>{
+          const {theirR:their,yourR:your,combined}=g;
+          const barPct=Math.max(4,combined/mx*100);
+          const theirPct=combined?their/combined*100:50;
+          return `<div style="padding:9px 12px;border-bottom:1px solid var(--border);display:grid;grid-template-columns:28px 1fr 110px 70px;align-items:center;gap:10px;">
+            <div class="rank-idx">${String(i+1).padStart(2,'0')}</div>
+            <div style="min-width:0;overflow:hidden;">
+              <div style="font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(g.name)}</div>
+              ${g.their_monthly!=null||g.your_count!=null?`<div style="font-family:var(--font-mono);font-size:10px;margin-top:2px;"><span style="color:var(--amber)">Them ${fmt(their)}</span><span style="color:var(--muted)"> · </span><span style="color:var(--teal)">You ${fmt(your)}</span></div>`:'' }
+            </div>
+            <div class="rank-bar-track">
+              <div class="rank-bar-fill-wrap" style="width:${barPct}%">
+                <div style="width:${theirPct}%;background:var(--amber);height:100%;"></div>
+                <div style="flex:1;background:var(--teal);height:100%;"></div>
+              </div>
+            </div>
+            <div style="font-family:var(--font-mono);font-size:12px;text-align:right;color:var(--text);">${fmt(combined)}</div>
+          </div>`;
+        }).join('')+`<div style="padding:6px 12px;font-family:var(--font-mono);font-size:10px;color:var(--muted);"><span style="color:var(--amber)">■</span> Them &nbsp;<span style="color:var(--teal)">■</span> You${state.rangeKey!=='all'?' · '+state.rangeKey:' · all-time'}</div>`;
+      })()
     : '<div class="empty">Not in any group chats together.</div>';
 
   return `
@@ -321,7 +381,7 @@ function personProfileHtml(pid){
       <div class="hero-stat"><div class="num teal">${fmt(totalInRange)}</div><div class="label">1:1 messages${state.rangeKey!=='all'?' ('+state.rangeKey+')':''}</div></div>
       <div class="hero-stat"><div class="num">${fmt(sentInRange)}</div><div class="label">You sent</div></div>
       <div class="hero-stat"><div class="num amber">${fmt(recvInRange)}</div><div class="label">They sent</div></div>
-      <div class="hero-stat"><div class="num">${formatHour(peakH)}</div><div class="label">They usually text</div></div>
+      <div class="hero-stat"><div class="num" style="font-size:${bucket.length>9?'18px':'26px'}">${esc(bucket)}</div><div class="label">Usual texting time</div></div>
     </div>
 
     ${sectionHtml('p-trend','Activity Trend','1:1 messages by month · filtered by range',trendHtml)}
@@ -367,13 +427,6 @@ function personProfileHtml(pid){
       <div class="panel">${emojiCloud}</div>
     `)}
 
-    ${p.avg_chars_sent ? sectionHtml('p-len','Message Length','1:1 · all-time',`
-      <div class="length-grid">
-        <div class="length-card"><div class="length-label">Your avg length</div><div class="length-value teal">${fmtChars(p.avg_chars_sent)}</div></div>
-        <div class="length-card"><div class="length-label">Their avg length</div><div class="length-value amber">${fmtChars(p.avg_chars_received)}</div></div>
-      </div>
-    `) : ''}
-
     ${sectionHtml('p-groups','Shared Group Chats','all-time',`<div class="panel">${gcHtml}</div>`)}
     ${sectionHtml('p-gp','Game Pigeon','1:1 only · all-time',`<div class="panel">${gpBlock}</div>`)}
   `;
@@ -385,15 +438,24 @@ function groupProfileHtml(gid){
   const chat=DATA.chats[gid]||{};
   const range=rangeFor(state.rangeKey, DATA.meta.date_min, DATA.meta.date_max);
 
-  // Sender breakdown
+  // Filter monthly activity by range
+  const filteredActivity={};
+  let totalInRange=0;
+  for(const [mk,cnt] of Object.entries(g.activity_by_month||{})){
+    const d=new Date(mk+'-01').getTime();
+    if(d>=range.start&&d<=range.end){filteredActivity[mk]=cnt;totalInRange+=cnt;}
+  }
+
+  // Sender breakdown — "me" represents outgoing messages (you)
   const senders=(g.sender_counts||[]).map(([pid,cnt],i)=>{
-    const name=DATA.handles[pid]||pid;
+    const name=pid==='me'?'You':(DATA.handles[pid]||pid);
+    const barColor=pid==='me'?'var(--teal)':'var(--amber)';
     const mx=(g.sender_counts[0]||[])[1]||1;
     const pct=Math.max(4,cnt/mx*100);
     return `<div class="rank-row">
       <div class="rank-idx">${String(i+1).padStart(2,'0')}</div>
       <div class="rank-name">${esc(name)}</div>
-      <div class="rank-bar-track"><div class="rank-bar-fill" style="width:${pct}%"></div></div>
+      <div class="rank-bar-track"><div class="rank-bar-fill" style="width:${pct}%;background:${barColor}"></div></div>
       <div class="rank-count">${fmt(cnt)}</div>
     </div>`;
   }).join('');
@@ -405,7 +467,7 @@ function groupProfileHtml(gid){
     const tip=`${formatHour(h)} — ${fmt(v)} messages`;
     return `<div class="hour-cell" style="background:rgba(94,234,212,${a})" data-tip="${esc(tip)}" onmouseenter="showTip(event,this.dataset.tip)" onmousemove="moveTip(event)" onmouseleave="hideTip()"></div>`;
   }).join('');
-  const hourLabels=['12a','','','3a','','','6a','','','9a','','','12p','','','3p','','','6p','','','9p','',''].map(l=>`<div style="text-align:center;font-family:var(--font-mono);font-size:8px;color:var(--muted)">${l}</div>`).join('');
+  const hourLabels=['12 AM','','','3 AM','','','6 AM','','','9 AM','','','12 PM','','','3 PM','','','6 PM','','','9 PM','',''].map(l=>`<div style="text-align:center;font-family:var(--font-mono);font-size:7px;color:var(--muted)">${l}</div>`).join('');
 
   const words=g.top_words||[];
   const phrases=g.top_phrases||[];
@@ -421,7 +483,8 @@ function groupProfileHtml(gid){
     ? `<div class="emoji-cloud">`+emojis.map(([e,c])=>`<div class="emoji-chip">${esc(e)}<span class="en">${fmt(c)}</span></div>`).join('')+`</div>`
     : '<div class="empty">No emoji found.</div>';
 
-  const trendHtml=`<div class="chart-wrap"><canvas id="group-trend-canvas" style="width:100%;height:140px;"></canvas></div>`;
+  const rangeLabelG=state.rangeKey==='all'?'All Time':state.rangeKey;
+  const trendHtml=`<div style="padding:8px 14px 0;font-family:var(--font-mono);font-size:11px;color:var(--muted);">${rangeLabelG}</div><div class="chart-wrap"><canvas id="group-trend-canvas" style="width:100%;height:140px;"></canvas></div><div id="group-trend-canvas-legend" class="chart-legend"></div>`;
 
   return `
     <div class="profile-header">
@@ -433,13 +496,13 @@ function groupProfileHtml(gid){
     </div>
 
     <div class="hero-row">
-      <div class="hero-stat"><div class="num teal">${fmt(g.total||0)}</div><div class="label">Total messages</div></div>
+      <div class="hero-stat"><div class="num teal">${fmt(totalInRange)}</div><div class="label">Messages${state.rangeKey!=='all'?' ('+state.rangeKey+')':''}</div></div>
       <div class="hero-stat"><div class="num">${fmt((chat.participants||[]).length+1)}</div><div class="label">Members</div></div>
-      <div class="hero-stat"><div class="num">${(g.sender_counts||[]).length?esc(DATA.handles[(g.sender_counts[0]||[])[0]]||'—'):'—'}</div><div class="label">Most active</div></div>
+      <div class="hero-stat"><div class="num" style="font-size:18px">${(()=>{const top=(g.sender_counts||[])[0];if(!top)return'—';return top[0]==='me'?'You':esc(DATA.handles[top[0]]||top[0]);})()}</div><div class="label">Most active</div></div>
       <div class="hero-stat"><div class="num">${formatHour(hourCounts.indexOf(Math.max(...hourCounts)))}</div><div class="label">Peak hour</div></div>
     </div>
 
-    ${sectionHtml('g-trend','Activity Trend','messages per month · all-time',trendHtml)}
+    ${sectionHtml('g-trend','Activity Trend','messages per month · filtered by range',trendHtml)}
 
     ${sectionHtml('g-senders','Who Sends Most','all-time message count',`<div class="panel">${senders||'<div class="empty">No data.</div>'}</div>`)}
 
@@ -462,6 +525,61 @@ function groupProfileHtml(gid){
   `;
 }
 
+// ── Top 10 landing-page helpers ──────────────────────────────────────────
+function top10PersonsHtml(){
+  const range=rangeFor(state.rangeKey, DATA.meta.date_min, DATA.meta.date_max);
+  const scored=Object.entries(DATA.person_profiles||{}).map(([pid,p])=>{
+    const sent=filterPersonMessages(p.monthly_sent||{}, range.start, range.end);
+    const recv=filterPersonMessages(p.monthly_received||{}, range.start, range.end);
+    return {pid, name:DATA.handles[pid]||pid, sent, recv, total:sent+recv};
+  }).filter(x=>x.total>0).sort((a,b)=>b.total-a.total).slice(0,10);
+  if(!scored.length) return `<div class="empty">No 1:1 messages in this range.</div>`;
+  const max=scored[0].total;
+  return scored.map((p,i)=>`
+    <div class="lookup-result-row" onclick="state.personId='${p.pid}';state.personQuery='${esc(p.name)}';render()" style="padding:8px 4px;">
+      ${avatarHtml(p.pid,'32px')}
+      <div style="flex:1;overflow:hidden;min-width:0;">
+        <div class="lookup-result-name">${esc(p.name)}</div>
+        <div class="lookup-result-sub"><span style="color:var(--teal)">${fmt(p.sent)}</span> sent · <span style="color:var(--amber)">${fmt(p.recv)}</span> received</div>
+      </div>
+      <div style="width:90px;">
+        <div class="rank-bar-track">
+          <div class="rank-bar-fill-wrap" style="width:${Math.max(4,p.total/max*100)}%">
+            <div style="width:${p.total?p.sent/p.total*100:50}%;background:var(--teal);height:100%;"></div>
+            <div style="flex:1;height:100%;background:var(--amber);"></div>
+          </div>
+        </div>
+      </div>
+      <div style="width:52px;text-align:right;font-family:var(--font-mono);font-size:12px;color:var(--text);">${fmt(p.total)}</div>
+    </div>`).join('');
+}
+
+function top10GroupsHtml(){
+  const range=rangeFor(state.rangeKey, DATA.meta.date_min, DATA.meta.date_max);
+  const scored=Object.entries(DATA.chat_profiles||{}).map(([gid,g])=>{
+    const total=filterPersonMessages(g.activity_by_month||{}, range.start, range.end);
+    const participants=DATA.chats[gid]?.participants;
+    const members=participants!=null?participants.length+1:'?';
+    return {gid, name:g.name, total, members};
+  }).filter(x=>x.total>0).sort((a,b)=>b.total-a.total).slice(0,10);
+  if(!scored.length) return `<div class="empty">No group chat messages in this range.</div>`;
+  const max=scored[0].total;
+  return scored.map((g,i)=>`
+    <div class="lookup-result-row" onclick="state.groupId='${g.gid}';state.groupQuery='${esc(g.name)}';render()" style="padding:8px 4px;">
+      <div class="lookup-result-avatar" style="font-size:18px;flex-shrink:0;">💬</div>
+      <div style="flex:1;overflow:hidden;min-width:0;">
+        <div class="lookup-result-name">${esc(g.name)}</div>
+        <div class="lookup-result-sub">${g.members} members</div>
+      </div>
+      <div style="width:90px;">
+        <div class="rank-bar-track">
+          <div class="rank-bar-fill" style="width:${Math.max(4,g.total/max*100)}%;background:var(--amber);"></div>
+        </div>
+      </div>
+      <div style="width:52px;text-align:right;font-family:var(--font-mono);font-size:12px;color:var(--text);">${fmt(g.total)}</div>
+    </div>`).join('');
+}
+
 // ── Canvas trend chart ──────────────────────────────────────────────────
 function drawTrend(canvasId, monthlyData, color){
   const canvas=document.getElementById(canvasId);
@@ -472,64 +590,246 @@ function drawTrend(canvasId, monthlyData, color){
   const w=canvas.clientWidth, h=canvas.clientHeight;
   canvas.width=w*dpr; canvas.height=h*dpr;
   ctx.scale(dpr,dpr);
-  ctx.clearRect(0,0,w,h);
+
   const entries=Object.entries(monthlyData||{}).sort((a,b)=>a[0]<b[0]?-1:1);
-  if(!entries.length) return;
   const vals=entries.map(e=>e[1]);
+  if(!entries.length||vals.every(v=>v===0)){
+    ctx.clearRect(0,0,w,h);
+    ctx.fillStyle='#8492A0';ctx.font='13px IBM Plex Mono,monospace';
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText('No messages during this period.',w/2,h/2);
+    canvas.onmousemove=null;canvas.onmouseleave=null;
+    return;
+  }
   const maxV=Math.max(...vals,1);
-  const padS=10,padT=8,padB=20;
-  const pw=w-padS*2,ph=h-padT-padB;
+  const padL=32,padR=10,padT=8,padB=32;
+  const pw=w-padL-padR,ph=h-padT-padB;
   const n=entries.length;
   const sx=n>1?pw/(n-1):0;
-  const ptX=i=>padS+i*sx;
+  const ptX=i=>padL+i*sx;
   const ptY=v=>padT+ph-(v/maxV)*ph;
 
-  ctx.strokeStyle='#26313C';ctx.lineWidth=1;
-  for(let i=0;i<=2;i++){const y=padT+ph*i/2;ctx.beginPath();ctx.moveTo(padS,y);ctx.lineTo(w-padS,y);ctx.stroke();}
+  // Multi-year detection for label formatting
+  const allYears=new Set(entries.map(e=>e[0].slice(0,4)));
+  const multiYear=allYears.size>1;
+  function fmtLbl(key){
+    const [y,mo]=key.split('-').map(Number);
+    const dt=new Date(y,mo-1,1);
+    const abbr=dt.toLocaleDateString('en-US',{month:'short'});
+    return multiYear?`${abbr} '${String(y).slice(2)}`:abbr;
+  }
 
-  ctx.beginPath();
-  entries.forEach((e,i)=>{const x=ptX(i),y=ptY(e[1]);if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});
   const grad=ctx.createLinearGradient(0,padT,0,padT+ph);
   grad.addColorStop(0,color.replace(')',',0.35)').replace('rgb','rgba'));
   grad.addColorStop(1,color.replace(')',',0.02)').replace('rgb','rgba'));
-  ctx.lineTo(ptX(n-1),padT+ph);ctx.lineTo(padS,padT+ph);ctx.closePath();ctx.fillStyle=grad;ctx.fill();
 
-  ctx.beginPath();
-  entries.forEach((e,i)=>{const x=ptX(i),y=ptY(e[1]);if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});
-  ctx.strokeStyle=color;ctx.lineWidth=1.6;
-  ctx.shadowColor=color.replace(')',',0.5)').replace('rgb','rgba');ctx.shadowBlur=4;ctx.stroke();ctx.shadowBlur=0;
+  const ticks=n<=12?entries.map((_,i)=>i):entries.reduce((a,_,i,arr)=>{
+    if(i===0||i===arr.length-1||(i%(Math.floor(n/5)))===0)a.push(i);return a;
+  },[]);
 
-  ctx.fillStyle='#8492A0';ctx.font='9px IBM Plex Mono,monospace';ctx.textBaseline='top';
-  const ticks=n<=12?entries.map((_,i)=>i):entries.reduce((a,_,i,arr)=>{if(i===0||i===arr.length-1||(i%(Math.floor(n/5)))===0)a.push(i);return a;},[]);
-  ticks.forEach(i=>{
-    const label=entries[i][0].slice(0,7);
-    ctx.textAlign=i===0?'left':i===n-1?'right':'center';
-    ctx.fillText(label,ptX(i),padT+ph+4);
-  });
+  function fmtY(v){ v=Math.round(v); return v>=1e6?Math.round(v/1e6)+'M':v>=1000?Math.round(v/1000)+'K':String(v); }
+
+  function drawBase(){
+    ctx.clearRect(0,0,w,h);
+
+    // Gridlines + y-axis value labels
+    ctx.strokeStyle='#26313C';ctx.lineWidth=1;
+    ctx.fillStyle='#8492A0';ctx.font='9px IBM Plex Mono,monospace';
+    ctx.textAlign='right';ctx.textBaseline='middle';
+    for(let i=0;i<=2;i++){
+      const y=padT+ph*i/2;
+      ctx.beginPath();ctx.moveTo(padL,y);ctx.lineTo(w-padR,y);ctx.stroke();
+      const val=maxV*(1-i/2);
+      if(val>0) ctx.fillText(fmtY(val),padL-4,y);
+    }
+
+    // Area fill
+    ctx.beginPath();
+    entries.forEach((e,i)=>{const x=ptX(i),y=ptY(e[1]);if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});
+    ctx.lineTo(ptX(n-1),padT+ph);ctx.lineTo(padL,padT+ph);ctx.closePath();ctx.fillStyle=grad;ctx.fill();
+
+    // Line
+    ctx.beginPath();
+    entries.forEach((e,i)=>{const x=ptX(i),y=ptY(e[1]);if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});
+    ctx.strokeStyle=color;ctx.lineWidth=1.6;
+    ctx.shadowColor=color.replace(')',',0.5)').replace('rgb','rgba');ctx.shadowBlur=4;ctx.stroke();ctx.shadowBlur=0;
+
+    // Tick labels
+    ctx.fillStyle='#8492A0';ctx.font='9px IBM Plex Mono,monospace';ctx.textBaseline='top';
+    ticks.forEach(i=>{
+      ctx.textAlign=i===0?'left':i===n-1?'right':'center';
+      ctx.fillText(fmtLbl(entries[i][0]),ptX(i),padT+ph+4);
+    });
+
+    // X-axis title
+    ctx.fillStyle='#8492A0';ctx.font='9px IBM Plex Mono,monospace';
+    ctx.textAlign='center';ctx.textBaseline='bottom';
+    ctx.fillText('Month',padL+pw/2,h-2);
+
+    // Y-axis title (rotated)
+    ctx.save();
+    ctx.translate(10,padT+ph/2);ctx.rotate(-Math.PI/2);
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.font='9px IBM Plex Mono,monospace';ctx.fillStyle='#8492A0';
+    ctx.fillText('Messages',0,0);
+    ctx.restore();
+  }
+
+  drawBase();
 
   let lastDot=-1;
   canvas.onmousemove=function(e){
     const rect=canvas.getBoundingClientRect();const x=e.clientX-rect.left;
-    let idx=sx>0?Math.round((x-padS)/sx):0;idx=Math.max(0,Math.min(n-1,idx));
+    let idx=sx>0?Math.round((x-padL)/sx):0;idx=Math.max(0,Math.min(n-1,idx));
     showTip(e,`${entries[idx][0]} — ${fmt(entries[idx][1])} messages`);
-    if(idx!==lastDot){lastDot=idx;
-      ctx.clearRect(0,0,w,h);
-      // redraw gridlines
-      ctx.strokeStyle='#26313C';ctx.lineWidth=1;
-      for(let i=0;i<=2;i++){const y=padT+ph*i/2;ctx.beginPath();ctx.moveTo(padS,y);ctx.lineTo(w-padS,y);ctx.stroke();}
-      // area
-      ctx.beginPath();entries.forEach((en,i)=>{const cx=ptX(i),cy=ptY(en[1]);if(i===0)ctx.moveTo(cx,cy);else ctx.lineTo(cx,cy);});
-      ctx.lineTo(ptX(n-1),padT+ph);ctx.lineTo(padS,padT+ph);ctx.closePath();ctx.fillStyle=grad;ctx.fill();
-      // line
-      ctx.beginPath();entries.forEach((en,i)=>{const cx=ptX(i),cy=ptY(en[1]);if(i===0)ctx.moveTo(cx,cy);else ctx.lineTo(cx,cy);});
-      ctx.strokeStyle=color;ctx.lineWidth=1.6;ctx.shadowColor=color.replace(')',',0.5)').replace('rgb','rgba');ctx.shadowBlur=4;ctx.stroke();ctx.shadowBlur=0;
-      // dot
+    if(idx!==lastDot){
+      lastDot=idx;
+      drawBase();
       const dx=ptX(idx),dy=ptY(entries[idx][1]);
       ctx.beginPath();ctx.arc(dx,dy,4.5,0,Math.PI*2);ctx.fillStyle=color;ctx.shadowBlur=8;ctx.fill();ctx.shadowBlur=0;
       ctx.beginPath();ctx.arc(dx,dy,2.5,0,Math.PI*2);ctx.fillStyle='#0D1117';ctx.fill();
     }
   };
-  canvas.onmouseleave=function(){lastDot=-1;hideTip();};
+  canvas.onmouseleave=function(){lastDot=-1;hideTip();drawBase();};
+}
+
+// ── Stacked bar chart for group activity by participant ──────────────────
+const STACK_COLORS=['#5EEAD4','#F2A65A','#818CF8','#34D399','#F87171','#60A5FA','#94A3B8'];
+
+function drawStackedTrend(canvasId, actBySenderMonth, rangeKey, handles){
+  const canvas=document.getElementById(canvasId);
+  if(!canvas) return;
+  const ctx=canvas.getContext('2d');
+  if(!ctx) return;
+  const dpr=window.devicePixelRatio||1;
+  const w=canvas.clientWidth, h=canvas.clientHeight;
+  canvas.width=w*dpr; canvas.height=h*dpr;
+  ctx.scale(dpr,dpr);
+
+  // Build month list in range
+  let months=[];
+  if(rangeKey==='all'){
+    const allM=new Set();
+    for(const m of Object.values(actBySenderMonth||{})) for(const mk of Object.keys(m)) allM.add(mk);
+    months=Array.from(allM).sort();
+  } else {
+    const y=parseInt(rangeKey,10);
+    for(let m=1;m<=12;m++) months.push(y+'-'+String(m).padStart(2,'0'));
+  }
+
+  function showEmpty(msg){
+    ctx.clearRect(0,0,w,h);
+    ctx.fillStyle='#8492A0';ctx.font='13px IBM Plex Mono,monospace';
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(msg,w/2,h/2);
+    canvas.onmousemove=null;canvas.onmouseleave=null;
+  }
+
+  if(!months.length){showEmpty('No messages during this period.');return;}
+
+  // Sort senders by total, cap at 5, rest = "Other"
+  const senderTotals={};
+  for(const [sid,monthly] of Object.entries(actBySenderMonth||{}))
+    senderTotals[sid]=months.reduce((s,mk)=>s+(monthly[mk]||0),0);
+  const sorted=Object.entries(senderTotals).sort((a,b)=>b[1]-a[1]);
+  const MAX_S=5;
+  const topSids=sorted.slice(0,MAX_S).map(([s])=>s);
+  const hasOther=sorted.length>MAX_S;
+
+  // Compute stacked values per month [s0,s1,...,other]
+  const stacks=months.map(mk=>{
+    const top=topSids.map(sid=>(actBySenderMonth[sid]||{})[mk]||0);
+    const topSum=top.reduce((s,v)=>s+v,0);
+    const allSum=Object.values(actBySenderMonth||{}).reduce((s,m)=>s+(m[mk]||0),0);
+    return [...top,hasOther?Math.max(0,allSum-topSum):0];
+  });
+  const allSids=[...topSids,...(hasOther?['other']:[])];
+  const maxV=Math.max(...stacks.map(s=>s.reduce((a,v)=>a+v,0)),1);
+  if(stacks.every(s=>s.every(v=>v===0))){showEmpty('No messages during this period.');return;}
+
+  const padL=32,padR=10,padT=8,padB=32;
+  const pw=w-padL-padR,ph=h-padT-padB;
+  const n=months.length;
+  const barW=Math.max(2,pw/n*0.72);
+
+  function fmtY(v){v=Math.round(v);return v>=1e6?Math.round(v/1e6)+'M':v>=1000?Math.round(v/1000)+'K':String(v);}
+  const allYearsSet=new Set(months.map(m=>m.slice(0,4)));
+  const multiYear=allYearsSet.size>1;
+  function fmtLbl(mk){
+    const [y,mo]=mk.split('-').map(Number);
+    const abbr=new Date(y,mo-1,1).toLocaleDateString('en-US',{month:'short'});
+    return multiYear?`${abbr} '${String(y).slice(2)}`:abbr;
+  }
+
+  ctx.clearRect(0,0,w,h);
+
+  // Gridlines + Y labels
+  ctx.strokeStyle='#26313C';ctx.lineWidth=1;
+  ctx.fillStyle='#8492A0';ctx.font='9px IBM Plex Mono,monospace';
+  ctx.textAlign='right';ctx.textBaseline='middle';
+  for(let i=0;i<=2;i++){
+    const gy=padT+ph*i/2;
+    ctx.beginPath();ctx.moveTo(padL,gy);ctx.lineTo(w-padR,gy);ctx.stroke();
+    const val=maxV*(1-i/2);
+    if(val>0) ctx.fillText(fmtY(val),padL-4,gy);
+  }
+
+  // Stacked bars
+  months.forEach((mk,i)=>{
+    const cx=padL+(i+0.5)*pw/n;
+    const stack=stacks[i];
+    let y=padT+ph;
+    for(let s=0;s<allSids.length;s++){
+      const val=stack[s];if(!val)continue;
+      const bh=(val/maxV)*ph;
+      ctx.fillStyle=STACK_COLORS[s%STACK_COLORS.length];
+      ctx.fillRect(cx-barW/2,y-bh,barW,bh);
+      y-=bh;
+    }
+  });
+
+  // X tick labels
+  const ticks=n<=12?months.map((_,i)=>i):months.reduce((a,_,i,arr)=>{
+    if(i===0||i===arr.length-1||(i%Math.floor(n/5))===0)a.push(i);return a;
+  },[]);
+  ctx.fillStyle='#8492A0';ctx.font='9px IBM Plex Mono,monospace';ctx.textBaseline='top';
+  ticks.forEach(i=>{
+    ctx.textAlign=i===0?'left':i===n-1?'right':'center';
+    ctx.fillText(fmtLbl(months[i]),padL+(i+0.5)*pw/n,padT+ph+4);
+  });
+  ctx.fillStyle='#8492A0';ctx.font='9px IBM Plex Mono,monospace';
+  ctx.textAlign='center';ctx.textBaseline='bottom';
+  ctx.fillText('Month',padL+pw/2,h-2);
+  ctx.save();ctx.translate(10,padT+ph/2);ctx.rotate(-Math.PI/2);
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('Messages',0,0);ctx.restore();
+
+  // Inject legend into sibling element
+  const legendEl=document.getElementById(canvasId+'-legend');
+  if(legendEl){
+    legendEl.innerHTML=allSids.map((sid,i)=>{
+      const name=sid==='other'?'Other':(sid==='me'?'You':(handles[sid]||sid));
+      return `<div class="chart-legend-item"><div class="chart-legend-dot" style="background:${STACK_COLORS[i%STACK_COLORS.length]}"></div>${esc(name)}</div>`;
+    }).join('');
+  }
+
+  // Hover tooltip
+  canvas.onmousemove=function(e){
+    const rect=canvas.getBoundingClientRect();
+    const x=e.clientX-rect.left;
+    const i=Math.max(0,Math.min(n-1,Math.floor((x-padL)/pw*n)));
+    const stack=stacks[i];
+    const total=stack.reduce((s,v)=>s+v,0);
+    const lines=[months[i]];
+    allSids.forEach((sid,j)=>{
+      const v=stack[j];if(!v)return;
+      const name=sid==='other'?'Other':(sid==='me'?'You':(handles[sid]||sid));
+      lines.push(`${name}: ${fmt(v)}`);
+    });
+    lines.push(`Total: ${fmt(total)}`);
+    showTip(e,lines.join(' · '));
+  };
+  canvas.onmouseleave=function(){hideTip();};
 }
 
 // ── Main render ─────────────────────────────────────────────────────────
@@ -574,7 +874,14 @@ function render(){
           </div>`).join('')+`</div>`:pq?`<div class="empty">No matches.</div>`:''}
       </div>
     </div>
-    ${state.personId?personProfileHtml(state.personId):''}
+    ${state.personId?personProfileHtml(state.personId):(!pq?`
+    <div class="section">
+      <div class="section-head-static">
+        <div class="section-title" style="font-size:15px;color:var(--muted);">Top 10 People</div>
+        <div class="section-note">by 1:1 messages · ${state.rangeKey==='all'?'all-time':state.rangeKey}</div>
+      </div>
+      <div class="panel">${top10PersonsHtml()}</div>
+    </div>`:'') }
   `;
 
   const groupTabHtml=`
@@ -583,7 +890,7 @@ function render(){
       <div class="panel lookup-panel">
         <div class="lookup-search-wrap">
           <input id="group-search" type="text" placeholder="Search a group chat name…"
-            value="${esc(state.groupQuery||'')}" oninput="state.groupQuery=this.value;state.groupId=null;state._focusGroup=true;render()" />
+            value="${esc(state.groupQuery||'')}" oninput="state.groupQuery=this.value;state.groupId=null;state._focusGroup=true;state._groupCursor=this.selectionStart;render()" />
           ${state.groupId?`<button class="lookup-clear" onclick="state.groupId=null;state.groupQuery='';state._focusGroup=true;render()">Clear</button>`:''}
         </div>
         ${groupResults.length?`<div class="lookup-results">`+groupResults.map(([id,p])=>`
@@ -594,7 +901,14 @@ function render(){
           </div>`).join('')+`</div>`:gq?`<div class="empty">No matches.</div>`:''}
       </div>
     </div>
-    ${state.groupId?groupProfileHtml(state.groupId):''}
+    ${state.groupId?groupProfileHtml(state.groupId):(!gq?`
+    <div class="section">
+      <div class="section-head-static">
+        <div class="section-title" style="font-size:15px;color:var(--muted);">Top 10 Group Chats</div>
+        <div class="section-note">by messages · ${state.rangeKey==='all'?'all-time':state.rangeKey}</div>
+      </div>
+      <div class="panel">${top10GroupsHtml()}</div>
+    </div>`:'') }
   `;
 
   document.getElementById('root').innerHTML=`
@@ -629,7 +943,7 @@ function render(){
   }
   if(state._focusGroup&&state.tab==='group'){
     const inp=document.getElementById('group-search');
-    if(inp) inp.focus();
+    if(inp){inp.focus();if(state._groupCursor!=null)inp.setSelectionRange(state._groupCursor,state._groupCursor);}
     state._focusGroup=false;
   }
 
@@ -639,16 +953,72 @@ function render(){
     const range=rangeFor(state.rangeKey,DATA.meta.date_min,DATA.meta.date_max);
     const filtered={};
     for(const [mk,cnt] of Object.entries({...(p.monthly_sent||{})})){
-      if(new Date(mk+'-01').getTime()>=range.start) filtered[mk]=(filtered[mk]||0)+cnt;
+      const d=new Date(mk+'-01').getTime();
+      if(d>=range.start&&d<=range.end) filtered[mk]=(filtered[mk]||0)+cnt;
     }
     for(const [mk,cnt] of Object.entries({...(p.monthly_received||{})})){
-      if(new Date(mk+'-01').getTime()>=range.start) filtered[mk]=(filtered[mk]||0)+cnt;
+      const d=new Date(mk+'-01').getTime();
+      if(d>=range.start&&d<=range.end) filtered[mk]=(filtered[mk]||0)+cnt;
     }
-    requestAnimationFrame(()=>drawTrend('person-trend-canvas',filtered,'rgb(94,234,212)'));
+    const filled=fillYearMonths(filtered,state.rangeKey);
+    requestAnimationFrame(()=>drawTrend('person-trend-canvas',filled,'rgb(94,234,212)'));
   }
   if(state.groupId&&!collapseState['g-trend']){
     const g=DATA.chat_profiles[state.groupId]||{};
-    requestAnimationFrame(()=>drawTrend('group-trend-canvas',g.activity_by_month||{},'rgb(242,166,90)'));
+    const actBySender=g.activity_by_sender_month;
+    if(actBySender&&Object.keys(actBySender).length){
+      // Filter each sender's monthly data by range
+      const range=rangeFor(state.rangeKey,DATA.meta.date_min,DATA.meta.date_max);
+      const filteredBySender={};
+      for(const [sid,monthly] of Object.entries(actBySender)){
+        const fm={};
+        for(const [mk,cnt] of Object.entries(monthly)){
+          const d=new Date(mk+'-01').getTime();
+          if(d>=range.start&&d<=range.end) fm[mk]=cnt;
+        }
+        if(Object.keys(fm).length) filteredBySender[sid]=fm;
+        else filteredBySender[sid]={};  // keep sender in legend even if no data
+      }
+      requestAnimationFrame(()=>drawStackedTrend('group-trend-canvas',filteredBySender,state.rangeKey,DATA.handles));
+    } else {
+      // Fallback: single-line trend
+      const range=rangeFor(state.rangeKey,DATA.meta.date_min,DATA.meta.date_max);
+      const filtered={};
+      for(const [mk,cnt] of Object.entries(g.activity_by_month||{})){
+        const d=new Date(mk+'-01').getTime();
+        if(d>=range.start&&d<=range.end) filtered[mk]=cnt;
+      }
+      const filled=fillYearMonths(filtered,state.rangeKey);
+      requestAnimationFrame(()=>drawTrend('group-trend-canvas',filled,'rgb(242,166,90)'));
+    }
+  }
+
+  // Optional diagnostics (enable with ?debug=1 in the URL)
+  if(new URLSearchParams(location.search).has('debug')){
+    if(state.personId){
+      const p=DATA.person_profiles[state.personId]||{};
+      const range=rangeFor(state.rangeKey,DATA.meta.date_min,DATA.meta.date_max);
+      const contacts=DATA.handle_contacts[state.personId]||[];
+      console.groupCollapsed(`[Lookup Debug] Person: ${DATA.handles[state.personId]||state.personId}`);
+      console.log('Canonical ID:', state.personId);
+      console.log('Matched handles/addresses:', contacts);
+      console.log('Sent (all-time):', p.sent);
+      console.log('Received (all-time):', p.received);
+      console.log('Applied range:', new Date(range.start).toLocaleDateString(), '–', new Date(range.end).toLocaleDateString());
+      console.groupEnd();
+    }
+    if(state.groupId){
+      const g=DATA.chat_profiles[state.groupId]||{};
+      const chat=DATA.chats[state.groupId]||{};
+      const range=rangeFor(state.rangeKey,DATA.meta.date_min,DATA.meta.date_max);
+      console.groupCollapsed(`[Lookup Debug] Group: ${g.name||state.groupId}`);
+      console.log('Canonical ID:', state.groupId);
+      console.log('Participants:', chat.participants);
+      console.log('Total messages (all-time):', g.total);
+      console.log('Applied range:', new Date(range.start).toLocaleDateString(), '–', new Date(range.end).toLocaleDateString());
+      console.log('Sender counts:', g.sender_counts);
+      console.groupEnd();
+    }
   }
 }
 

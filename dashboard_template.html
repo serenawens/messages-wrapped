@@ -30,8 +30,9 @@
 
   /* Header / statement bar */
   .statement-head{
+    position:sticky;top:0;z-index:100;background:var(--ink);
     display:flex;justify-content:space-between;align-items:flex-end;
-    border-bottom:1px solid var(--border);padding-bottom:18px;margin-bottom:22px;
+    border-bottom:1px solid var(--border);padding-bottom:18px;padding-top:12px;margin-bottom:22px;
     flex-wrap:wrap;gap:16px;
   }
   .eyebrow{
@@ -480,8 +481,8 @@ function hourlyStripHtml(hourCounts){
     cells += `<div class="hour-cell" style="background:rgba(94,234,212,${(0.06+alpha*0.85).toFixed(3)})"
       data-tip="${esc(tip)}" onmouseenter="showTip(event,this.dataset.tip)" onmousemove="moveTip(event)" onmouseleave="hideTip()"></div>`;
   }
-  const labels = ['12a','','','3a','','','6a','','','9a','','','12p','','','3p','','','6p','','','9p','',''];
-  const labelRow = labels.map(l=>`<div style="text-align:center;font-family:var(--font-mono);font-size:8px;color:var(--muted)">${l}</div>`).join('');
+  const labels = ['12 AM','','','3 AM','','','6 AM','','','9 AM','','','12 PM','','','3 PM','','','6 PM','','','9 PM','',''];
+  const labelRow = labels.map(l=>`<div style="text-align:center;font-family:var(--font-mono);font-size:7px;color:var(--muted)">${l}</div>`).join('');
   return `<div class="hour-strip">${cells}</div><div style="display:grid;grid-template-columns:repeat(24,1fr);padding:0 14px 8px">${labelRow}</div>`;
 }
 
@@ -558,13 +559,6 @@ function renderPersonProfile(p){
       ${sectionHtml('lookup-words', 'Top Words (1:1)', 'combined words from your 1:1 conversation', `<div class="panel">${wordCloud}</div>`)}
 
       ${sectionHtml('lookup-emoji', 'Emoji (1:1)', 'all-time', `<div class="panel"><div style="padding:4px 0 0 8px;font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-bottom:-4px">YOU SENT</div>${emojiRow(p.emojis_sent)}<div style="padding:4px 0 0 8px;font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-bottom:-4px">THEY SENT</div>${emojiRow(p.emojis_received)}</div>`)}
-
-      ${p.avgCharsSent ? sectionHtml('lookup-len', 'Message Length (1:1)', 'average characters per message', `
-        <div class="reply-grid">
-          <div class="reply-card"><div class="reply-label">Your avg length</div><div class="reply-value teal">${p.avgCharsSent} chars</div></div>
-          <div class="reply-card"><div class="reply-label">Their avg length</div><div class="reply-value amber">${p.avgCharsReceived||'—'} chars</div></div>
-        </div>
-      `) : ''}
 
       ${sectionHtml('lookup-gp', 'Game Pigeon', '1:1 only', `<div class="panel">${gpInner}</div>`)}
     </div>
@@ -678,14 +672,14 @@ function groupChatRowHtml(idx, item, max){
 function heatGridHtml(heat){
   const max = Math.max(...heat.flat(),1);
   const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  function heatHourFmt(h){ return h===0?'12a':h===12?'12p':h<12?h+'a':(h-12)+'p'; }
   let cells = `<div></div>`;
-  for(let h=0;h<24;h++){ cells += `<div class="heat-hour-label">${h%2===0?h:''}</div>`; }
+  for(let h=0;h<24;h++){ cells += `<div class="heat-hour-label">${h%2===0?heatHourFmt(h):''}</div>`; }
   days.forEach((d,di)=>{
     cells += `<div class="heat-label">${d}</div>`;
     heat[di].forEach((v,hi)=>{
       const alpha = v/max;
-      const hourLabel = String(hi).padStart(2,'0')+':00';
-      const tip = `${d} ${hourLabel} — ${fmt(v)} message${v===1?'':'s'}`;
+      const tip = `${d} ${formatHourLabel(hi)} — ${fmt(v)} message${v===1?'':'s'}`;
       cells += `<div class="heat-cell" style="background:rgba(94,234,212,${(0.06+alpha*0.85).toFixed(3)})"
         data-tip="${esc(tip)}"
         onmouseenter="showTip(event,this.dataset.tip)"
@@ -719,19 +713,16 @@ function hideTip(){
 }
 
 function emojiStatsHtml(){
-  const years = Object.keys(DATA.emoji_freq.by_year_sent||{}).sort();
-  const allYears = [...new Set([...years, ...Object.keys(DATA.emoji_freq.by_year_received||{})])].sort();
-  const [emojiYear, setEmojiYear] = [state.emojiYear||'all', (y)=>{ state.emojiYear=y; render(); }];
-
+  const yr = state.rangeKey||'all';
   const audTab = (key,label) => `<button class="tab-btn${state.emojiAud===key?' active':''}" onclick="state.emojiAud='${key}';render()">${label}</button>`;
 
   let items;
-  if(emojiYear==='all'){
+  if(yr==='all'){
     const src = state.emojiAud==='sent' ? DATA.emoji_freq.sent : state.emojiAud==='received' ? DATA.emoji_freq.received : DATA.emoji_freq.overall;
     items = src||[];
   } else {
-    const sentY = (DATA.emoji_freq.by_year_sent||{})[emojiYear]||[];
-    const recvY = (DATA.emoji_freq.by_year_received||{})[emojiYear]||[];
+    const sentY = (DATA.emoji_freq.by_year_sent||{})[yr]||[];
+    const recvY = (DATA.emoji_freq.by_year_received||{})[yr]||[];
     if(state.emojiAud==='sent') items=sentY;
     else if(state.emojiAud==='received') items=recvY;
     else {
@@ -742,18 +733,14 @@ function emojiStatsHtml(){
     }
   }
 
-  const pills = [`<button class="year-pill${emojiYear==='all'?' active':''}" onclick="state.emojiYear='all';render()">All time</button>`,
-    ...allYears.map(y=>`<button class="year-pill${emojiYear===y?' active':''}" onclick="state.emojiYear='${y}';render()">${y}</button>`)
-  ].join('');
-
+  const rangeLabel = yr==='all' ? 'all-time' : yr;
   const chips = items.length
     ? items.slice(0,40).map(([e,c])=>`<div class="emoji-chip">${esc(e)}<span class="en">${fmt(c)}</span></div>`).join('')
-    : `<div class="empty">No emoji found.</div>`;
+    : `<div class="empty">No emoji found for ${esc(rangeLabel)}.</div>`;
 
-  return sectionHtml('emoji', 'Emoji', 'frequency of emojis used', `
+  return sectionHtml('emoji', 'Emoji Frequency', `${rangeLabel} · frequency of emojis used`, `
     <div class="panel" style="padding:12px;">
       <div class="tabs" style="margin-bottom:8px;">${audTab('overall','Overall')}${audTab('sent','You')}${audTab('received','Everyone else')}</div>
-      <div class="year-pills">${pills}</div>
       <div class="emoji-cloud">${chips}</div>
     </div>
   `);
@@ -787,8 +774,16 @@ function msgLengthHtml(){
 
 function longestMsgsHtml(){
   const side = state.longestSide||'sent';
-  const msgs = (DATA.longest_messages[side]||[]);
-  const [expandedIdx, setExpanded] = [state.longestExpanded||{}, null];
+  const yr = state.rangeKey||'all';
+
+  // Support both old format {sent, received} and new format {all:{sent,received}, by_year:{...}}
+  const lm = DATA.longest_messages;
+  let msgs;
+  if(lm && lm.all){
+    msgs = yr==='all' ? (lm.all[side]||[]) : ((lm.by_year||{})[yr]||{})[side]||[];
+  } else {
+    msgs = (lm||{})[side]||[];
+  }
 
   const rows = msgs.map((m,i)=>{
     const isExpanded = !!state.longestExpanded?.[`${side}_${i}`];
@@ -807,9 +802,10 @@ function longestMsgsHtml(){
     <button class="tab-btn${side==='received'?' active':''}" onclick="state.longestSide='received';state.longestExpanded={};render()">You received</button>
   </div>`;
 
-  return sectionHtml('longest', 'Longest Messages', 'all-time, by character count', `
+  const noteYear = yr==='all' ? 'all-time' : yr;
+  return sectionHtml('longest', 'Longest Messages', `${noteYear} · ranked by character count`, `
     <div style="padding:8px 12px;">${audBtns}</div>
-    <div class="panel">${rows||'<div class="empty">No messages found.</div>'}</div>
+    <div class="panel">${rows||`<div class="empty">No messages found for ${esc(noteYear)}.</div>`}</div>
   `);
 }
 
@@ -885,14 +881,20 @@ function drawYearlyChart(stats){
   if(stats.length===0) return;
 
   const maxV = Math.max(...stats.map(s=>Math.max(s.sent,s.received)),1);
-  const padSide=10, padTop=10, padBottom=24;
-  const plotW = w-padSide*2, plotH = h-padTop-padBottom;
+  const padLeft=30, padRight=10, padTop=10, padBottom=36;
+  const plotW = w-padLeft-padRight, plotH = h-padTop-padBottom;
+
+  function fmtY(v){ v=Math.round(v); return v>=1e6?Math.round(v/1e6)+'M':v>=1000?Math.round(v/1000)+'K':String(v); }
 
   ctx.strokeStyle = '#26313C';
   ctx.lineWidth = 1;
+  ctx.fillStyle = '#8492A0'; ctx.font = '9px IBM Plex Mono, monospace';
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
   for(let i=0;i<=3;i++){
     const y = padTop + plotH*i/3;
-    ctx.beginPath(); ctx.moveTo(padSide,y); ctx.lineTo(w-padSide,y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(padLeft,y); ctx.lineTo(w-padRight,y); ctx.stroke();
+    const val = maxV*(1-i/3);
+    if(val > 0) ctx.fillText(fmtY(val), padLeft-4, y);
   }
 
   const n = stats.length;
@@ -906,7 +908,7 @@ function drawYearlyChart(stats){
   ctx.textBaseline = 'top';
 
   stats.forEach((s,i)=>{
-    const groupCenter = padSide + groupW*i + groupW/2;
+    const groupCenter = padLeft + groupW*i + groupW/2;
     const sentH = (s.sent/maxV)*plotH;
     const recvH = (s.received/maxV)*plotH;
     const sentX = groupCenter - barW - gap/2;
@@ -922,6 +924,21 @@ function drawYearlyChart(stats){
 
     bars.push({x0: sentX, x1: recvX+barW, year: s.year, sent: s.sent, received: s.received});
   });
+
+  // X-axis title
+  ctx.fillStyle = '#8492A0';
+  ctx.font = '9px IBM Plex Mono, monospace';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+  ctx.fillText('Year', padLeft + plotW/2, h - 3);
+
+  // Y-axis title (rotated)
+  ctx.save();
+  ctx.translate(10, padTop + plotH/2);
+  ctx.rotate(-Math.PI/2);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = '9px IBM Plex Mono, monospace'; ctx.fillStyle = '#8492A0';
+  ctx.fillText('Messages', 0, 0);
+  ctx.restore();
 
   canvas.onmousemove = function(e){
     const rect = canvas.getBoundingClientRect();
@@ -1051,51 +1068,77 @@ function drawActivityChart(dayEntries){
 
   const vals = dayEntries.map(e=>e[1]);
   const maxV = Math.max(...vals,1);
-  const padSide = 10, padTop = 10, padBottom = 24;
-  const plotW = w - padSide*2, plotH = h - padTop - padBottom;
+  const padLeft = 30, padRight = 10, padTop = 10, padBottom = 36;
+  const plotW = w - padLeft - padRight, plotH = h - padTop - padBottom;
   const years = new Set(dayEntries.map(e=>e[0].slice(0,4)));
   const multiYear = years.size > 1;
   const n = dayEntries.length;
   const stepX = n>1 ? plotW/(n-1) : 0;
 
-  function ptX(i){ return padSide + i*stepX; }
+  function ptX(i){ return padLeft + i*stepX; }
   function ptY(v){ return padTop + plotH - (v/maxV)*plotH; }
 
-  // Grid lines
-  ctx.strokeStyle = '#26313C'; ctx.lineWidth = 1;
-  for(let i=0;i<=3;i++){
-    const y = padTop + plotH*i/3;
-    ctx.beginPath(); ctx.moveTo(padSide,y); ctx.lineTo(w-padSide,y); ctx.stroke();
-  }
-
-  // Area fill
-  ctx.beginPath();
-  dayEntries.forEach((e,i)=>{ const x=ptX(i),y=ptY(e[1]); if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); });
   const grad = ctx.createLinearGradient(0,padTop,0,padTop+plotH);
   grad.addColorStop(0,'rgba(94,234,212,0.35)'); grad.addColorStop(1,'rgba(94,234,212,0.02)');
-  ctx.lineTo(ptX(n-1),padTop+plotH); ctx.lineTo(padSide,padTop+plotH);
-  ctx.closePath(); ctx.fillStyle = grad; ctx.fill();
 
-  // Line
-  ctx.beginPath();
-  dayEntries.forEach((e,i)=>{ const x=ptX(i),y=ptY(e[1]); if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); });
-  ctx.strokeStyle = '#5EEAD4'; ctx.lineWidth = 1.6;
-  ctx.shadowColor = 'rgba(94,234,212,0.6)'; ctx.shadowBlur = 4; ctx.stroke(); ctx.shadowBlur = 0;
-
-  // Axis labels
   const maxTicks = w < 500 ? 4 : 6;
   const tickIdx = pickTickIndices(n, maxTicks);
-  ctx.strokeStyle = '#26313C'; ctx.fillStyle = '#8492A0';
-  ctx.font = '10px IBM Plex Mono, monospace'; ctx.textBaseline = 'top';
-  tickIdx.forEach(i=>{
-    const x = ptX(i);
-    ctx.beginPath(); ctx.moveTo(x,padTop+plotH); ctx.lineTo(x,padTop+plotH+4); ctx.stroke();
-    const label = formatAxisDate(dayEntries[i][0], multiYear);
-    ctx.textAlign = i===0 ? 'left' : i===n-1 ? 'right' : 'center';
-    ctx.fillText(label, x, padTop+plotH+7);
-  });
 
-  // Helper: draw dot at index i on top of everything
+  function fmtY(v){ v=Math.round(v); return v>=1e6?Math.round(v/1e6)+'M':v>=1000?Math.round(v/1000)+'K':String(v); }
+
+  function drawBase(){
+    ctx.clearRect(0,0,w,h);
+
+    // Grid lines + y-axis value labels
+    ctx.strokeStyle = '#26313C'; ctx.lineWidth = 1;
+    ctx.fillStyle = '#8492A0'; ctx.font = '9px IBM Plex Mono, monospace';
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for(let i=0;i<=3;i++){
+      const y = padTop + plotH*i/3;
+      ctx.beginPath(); ctx.moveTo(padLeft,y); ctx.lineTo(w-padRight,y); ctx.stroke();
+      const val = maxV*(1-i/3);
+      if(val > 0) ctx.fillText(fmtY(val), padLeft-4, y);
+    }
+
+    // Area fill
+    ctx.beginPath();
+    dayEntries.forEach((e,i)=>{ const x=ptX(i),y=ptY(e[1]); if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); });
+    ctx.lineTo(ptX(n-1),padTop+plotH); ctx.lineTo(padLeft,padTop+plotH);
+    ctx.closePath(); ctx.fillStyle = grad; ctx.fill();
+
+    // Line
+    ctx.beginPath();
+    dayEntries.forEach((e,i)=>{ const x=ptX(i),y=ptY(e[1]); if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); });
+    ctx.strokeStyle = '#5EEAD4'; ctx.lineWidth = 1.6;
+    ctx.shadowColor = 'rgba(94,234,212,0.6)'; ctx.shadowBlur = 4; ctx.stroke(); ctx.shadowBlur = 0;
+
+    // Axis tick marks and labels
+    ctx.strokeStyle = '#26313C'; ctx.fillStyle = '#8492A0';
+    ctx.font = '10px IBM Plex Mono, monospace'; ctx.textBaseline = 'top';
+    tickIdx.forEach(i=>{
+      const x = ptX(i);
+      ctx.beginPath(); ctx.moveTo(x,padTop+plotH); ctx.lineTo(x,padTop+plotH+4); ctx.stroke();
+      const label = formatAxisDate(dayEntries[i][0], multiYear);
+      ctx.textAlign = i===0 ? 'left' : i===n-1 ? 'right' : 'center';
+      ctx.fillText(label, x, padTop+plotH+7);
+    });
+
+    // X-axis title
+    ctx.fillStyle = '#8492A0';
+    ctx.font = '9px IBM Plex Mono, monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.fillText('Date', padLeft + plotW/2, h - 3);
+
+    // Y-axis title (rotated)
+    ctx.save();
+    ctx.translate(10, padTop + plotH/2);
+    ctx.rotate(-Math.PI/2);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = '9px IBM Plex Mono, monospace'; ctx.fillStyle = '#8492A0';
+    ctx.fillText('Messages per day', 0, 0);
+    ctx.restore();
+  }
+
   function drawDot(i){
     const x=ptX(i), y=ptY(dayEntries[i][1]);
     ctx.beginPath(); ctx.arc(x,y,4.5,0,Math.PI*2);
@@ -1104,32 +1147,27 @@ function drawActivityChart(dayEntries){
     ctx.fillStyle='#0D1117'; ctx.fill();
   }
 
+  drawBase();
+
   let lastDotIdx = -1;
   canvas.onmousemove = function(e){
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
-    let idx = stepX>0 ? Math.round((x-padSide)/stepX) : 0;
+    let idx = stepX>0 ? Math.round((x-padLeft)/stepX) : 0;
     idx = Math.max(0, Math.min(n-1, idx));
     const [key, count] = dayEntries[idx];
     showTip(e, `Week of ${formatAxisDate(key, multiYear)} — avg ${fmt(count)}/day`);
     if(idx !== lastDotIdx){
       lastDotIdx = idx;
-      // Quick redraw only the dot area — clear row then redraw dot
-      ctx.clearRect(padSide, padTop, plotW+10, plotH+10);
-      // Re-draw area fill
-      ctx.beginPath();
-      dayEntries.forEach((en,i)=>{ const cx=ptX(i),cy=ptY(en[1]); if(i===0) ctx.moveTo(cx,cy); else ctx.lineTo(cx,cy); });
-      ctx.lineTo(ptX(n-1),padTop+plotH); ctx.lineTo(padSide,padTop+plotH);
-      ctx.closePath(); ctx.fillStyle=grad; ctx.fill();
-      // Re-draw line
-      ctx.beginPath();
-      dayEntries.forEach((en,i)=>{ const cx=ptX(i),cy=ptY(en[1]); if(i===0) ctx.moveTo(cx,cy); else ctx.lineTo(cx,cy); });
-      ctx.strokeStyle='#5EEAD4'; ctx.lineWidth=1.6;
-      ctx.shadowColor='rgba(94,234,212,0.6)'; ctx.shadowBlur=4; ctx.stroke(); ctx.shadowBlur=0;
+      drawBase();
       drawDot(idx);
     }
   };
-  canvas.onmouseleave = function(){ lastDotIdx=-1; hideTip(); };
+  canvas.onmouseleave = function(){
+    lastDotIdx = -1;
+    hideTip();
+    drawBase();
+  };
 }
 
 function render(){
@@ -1170,13 +1208,12 @@ function render(){
       `<div class="panel"><div class="chart-wrap"><canvas id="activity-canvas" style="width:100%;height:200px;"></canvas></div></div>`)}
     ${sectionHtml('signal', 'Signal Pattern', 'messages by hour &amp; weekday, in range',
       `<div class="panel">${heatGridHtml(agg.heat)}</div>`)}
+    ${emojiStatsHtml()}
+    ${longestMsgsHtml()}
   `;
 
   const allTimeHtml = `
     ${yearlyComparisonHtml()}
-    ${emojiStatsHtml()}
-    ${msgLengthHtml()}
-    ${longestMsgsHtml()}
     ${vocabularyHtml()}
   `;
 
