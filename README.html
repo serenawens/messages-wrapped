@@ -27,39 +27,19 @@
 files you open in a browser. <strong>Your data never leaves your Mac</strong> — no server,
 no uploads, no external libraries.</p>
 
-<h2 id="how-to-use">How to use</h2>
+<h2 id="tldr">TL;DR</h2>
 
 <ol>
-  <li><strong>Download these files into the same folder:</strong>
-    <ul>
-      <li><code>build_dashboard.py</code></li>
-      <li><code>dashboard_template.html</code></li>
-      <li><code>lookup_template.html</code></li>
-    </ul>
-  </li>
-  <li><strong>Grant Full Disk Access</strong> to your terminal app (one-time):
-    <ul>
-      <li>System Settings → Privacy &amp; Security → Full Disk Access</li>
-      <li>Add Terminal (or iTerm2, etc.), toggle on, then <strong>quit and reopen</strong> the app</li>
-    </ul>
-  </li>
-  <li><strong>Run the script</strong> from that folder:
-    <pre><code>python3 build_dashboard.py</code></pre>
-    <p>It reads <code>~/Library/Messages/chat.db</code> automatically (via a temporary copy,
-    so your real database is never locked). To point at a different file:</p>
-    <pre><code>python3 build_dashboard.py /path/to/chat.db</code></pre>
-  </li>
-  <li><strong>Open the output in your browser:</strong>
-    <ul>
-      <li><code>iMessage_Dashboard.html</code> — main dashboard</li>
-      <li><code>iMessage_Dashboard_Lookup.html</code> — search any person or group chat</li>
-    </ul>
-    <p>Double-click either file, or right-click → Open With → Safari/Chrome. No
-    internet connection required.</p>
-  </li>
+  <li><strong>Download the project zip</strong> and unzip it.</li>
+  <li><strong>Grant Full Disk Access</strong> to your terminal app (one-time), then restart it.</li>
+  <li><strong>Run</strong> <code>python3 build_dashboard.py</code> from the unzipped folder.</li>
+  <li><strong>Open</strong> <code>iMessage_Dashboard.html</code> in your browser.</li>
 </ol>
 
-<p>To preview the UI without your data, open <code>iMessage_Dashboard_SAMPLE.html</code>.</p>
+<p>The three files the script actually needs are <code>build_dashboard.py</code>,
+<code>dashboard_template.html</code>, and <code>lookup_template.html</code> — all included in the zip.</p>
+
+<p>Need more detail? See the <a href="#detailed-setup">full setup guide</a>.</p>
 
 <h2 id="whats-in-imessages-wrapped">What's in iMessages Wrapped</h2>
 
@@ -99,6 +79,46 @@ can be collapsed by clicking their headers.</p>
   <li><strong>De-duplication</strong> merges contacts or group chats only on an exact name match.
     Two different chats with the same name will be combined.</li>
 </ul>
+
+<h2 id="detailed-setup">Detailed setup</h2>
+
+<p><strong>1. Download and unzip the project.</strong></p>
+<p>Grab the zip from the repo's releases or download page, then unzip it anywhere
+on your Mac (e.g. <code>~/Documents/iMessages-Wrapped</code>). The zip includes the README,
+a sample dashboard, and the three files the script depends on:</p>
+<ul>
+  <li><code>build_dashboard.py</code> — reads your Messages data and generates the dashboards</li>
+  <li><code>dashboard_template.html</code> — main dashboard layout and logic</li>
+  <li><code>lookup_template.html</code> — lookup page layout and logic</li>
+</ul>
+<p>All three must stay in the same folder. Don't move or rename them separately.</p>
+
+<p><strong>2. Grant Full Disk Access (one-time).</strong></p>
+<p><code>chat.db</code> is a protected file on macOS, so your terminal needs permission:</p>
+<ol>
+  <li>Open <strong>System Settings → Privacy &amp; Security → Full Disk Access</strong></li>
+  <li>Click <strong>+</strong> and add your terminal app (Terminal, iTerm2, etc.)</li>
+  <li>Toggle it on</li>
+  <li><strong>Quit and reopen</strong> the terminal app — the permission doesn't apply until you restart it</li>
+</ol>
+
+<p><strong>3. Run the script.</strong></p>
+<p>Open Terminal, <code>cd</code> into the unzipped folder, then:</p>
+<pre><code>python3 build_dashboard.py</code></pre>
+<p>This reads <code>~/Library/Messages/chat.db</code> automatically via a temporary copy, so
+your real database is never locked. If it can't find your database, point it at
+the file directly:</p>
+<pre><code>python3 build_dashboard.py /path/to/chat.db</code></pre>
+
+<p><strong>4. Open the output in your browser.</strong></p>
+<p>The script creates two files in the same folder:</p>
+<ul>
+  <li><code>iMessage_Dashboard.html</code> — main dashboard</li>
+  <li><code>iMessage_Dashboard_Lookup.html</code> — search any person or group chat</li>
+</ul>
+<p>Double-click either file, or right-click → <strong>Open With</strong> → Safari/Chrome. No
+internet connection required.</p>
+<p>To preview the UI without your data, open <code>iMessage_Dashboard_SAMPLE.html</code>.</p>
 
 <h2 id="extra-naming-contacts">Extra: naming contacts (optional)</h2>
 
