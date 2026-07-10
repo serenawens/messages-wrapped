@@ -538,9 +538,11 @@ def main():
     len_by_year_sent: dict = defaultdict(list)   # year -> [char_counts]
     len_by_year_received: dict = defaultdict(list)
 
-    # Longest messages (keep top-10 heap per side)
+    # Longest messages (keep top-10 heap per side, all-time + per year)
     longest_sent: list = []    # [(char_count, ts, chat_name, text)]
     longest_received: list = []
+    longest_by_year_sent: dict = defaultdict(list)
+    longest_by_year_received: dict = defaultdict(list)
     import heapq
 
     # Game Pigeon (global by type)
@@ -605,7 +607,9 @@ def main():
         chat_monthly[chat_id][month_key] += 1
         hour = datetime.fromtimestamp(ts / 1000).hour
         chat_hour_counts[chat_id][hour] += 1
-        if not is_from_me and sender:
+        if is_from_me:
+            chat_sender_monthly[chat_id]["me"][month_key] += 1
+        elif sender:
             chat_sender_monthly[chat_id][sender][month_key] += 1
 
         # Per-person 1:1 tracking (for response times, word freq, emojis, lengths)
@@ -651,12 +655,17 @@ def main():
             if is_from_me:
                 len_sent_chars.append(char_count)
                 len_by_year_sent[year].append(char_count)
-                # Track longest (maintain top-10 min-heap)
+                # Track longest (maintain top-10 min-heap all-time, top-5 per year)
                 entry = (char_count, ts, chats[chat_id]["name"], clean_text)
                 if len(longest_sent) < 10:
                     heapq.heappush(longest_sent, entry)
                 elif char_count > longest_sent[0][0]:
                     heapq.heapreplace(longest_sent, entry)
+                yr_heap = longest_by_year_sent[year]
+                if len(yr_heap) < 5:
+                    heapq.heappush(yr_heap, entry)
+                elif char_count > yr_heap[0][0]:
+                    heapq.heapreplace(yr_heap, entry)
             else:
                 len_received_chars.append(char_count)
                 len_by_year_received[year].append(char_count)
@@ -665,6 +674,11 @@ def main():
                     heapq.heappush(longest_received, entry)
                 elif char_count > longest_received[0][0]:
                     heapq.heapreplace(longest_received, entry)
+                yr_heap = longest_by_year_received[year]
+                if len(yr_heap) < 5:
+                    heapq.heappush(yr_heap, entry)
+                elif char_count > yr_heap[0][0]:
+                    heapq.heapreplace(yr_heap, entry)
 
         if is_from_me:
             uni_sent.update(uni)
@@ -772,9 +786,19 @@ def main():
             for item in out
         ]
 
+    all_longest_years = set(longest_by_year_sent.keys()) | set(longest_by_year_received.keys())
     longest_messages = {
-        "sent": _serialise_longest(longest_sent),
-        "received": _serialise_longest(longest_received),
+        "all": {
+            "sent": _serialise_longest(longest_sent),
+            "received": _serialise_longest(longest_received),
+        },
+        "by_year": {
+            str(y): {
+                "sent": _serialise_longest(longest_by_year_sent.get(y, [])),
+                "received": _serialise_longest(longest_by_year_received.get(y, [])),
+            }
+            for y in sorted(all_longest_years)
+        },
     }
 
     # ── Person profiles (precomputed for fast JS lookup) ──
@@ -783,15 +807,23 @@ def main():
     person_group_chats_data: dict = defaultdict(list)
     for cid, chat in chats.items():
         if chat["group"]:
-            gchat_counts = Counter()
+            gchat_counts: Counter = Counter()
+            your_count_in_chat = 0
             for m in messages:
-                if m[1] == cid and m[2]:
-                    gchat_counts[m[2]] += 1
+                if m[1] == cid:
+                    if m[2]:        # incoming
+                        gchat_counts[m[2]] += 1
+                    elif m[3]:      # outgoing
+                        your_count_in_chat += 1
+            sender_monthly = chat_sender_monthly.get(cid, {})
             for pid in chat["participants"]:
                 person_group_chats_data[pid].append({
                     "id": cid,
                     "name": chat["name"],
                     "count": gchat_counts.get(pid, 0),
+                    "your_count": your_count_in_chat,
+                    "their_monthly": dict(sender_monthly.get(pid, {})),
+                    "your_monthly": dict(sender_monthly.get("me", {})),
                 })
 
     person_profiles = {}
@@ -844,11 +876,14 @@ def main():
     for cid, chat in chats.items():
         if not chat["group"]:
             continue
-        # Compute per-sender totals from messages list
+        # Compute per-sender totals from messages list (outgoing counted as "me")
         sender_cnts: Counter = Counter()
         for m in messages:
-            if m[1] == cid and m[2]:
-                sender_cnts[m[2]] += 1
+            if m[1] == cid:
+                if m[2]:        # incoming: has sender ID
+                    sender_cnts[m[2]] += 1
+                elif m[3]:      # outgoing: is_from_me
+                    sender_cnts["me"] += 1
         chat_profiles[cid] = {
             "name": chat["name"],
             "total": chat_msg_count.get(cid, 0),
@@ -859,6 +894,10 @@ def main():
             "top_emojis": _top_emoji(chat_emoji.get(cid, Counter()), 15),
             "hour_counts": chat_hour_counts[cid],
             "activity_by_month": dict(chat_monthly.get(cid, {})),
+            "activity_by_sender_month": {
+                pid: dict(monthly)
+                for pid, monthly in chat_sender_monthly.get(cid, {}).items()
+            },
         }
     print(f"  Built profiles for {len(chat_profiles)} group chats.")
 
@@ -920,9 +959,18 @@ def main():
         print(f"  {len(unresolved)} contact(s) couldn't be auto-matched. Wrote {template_path} -- "
               f"fill in names, save as contacts.json, and re-run to relabel just those.")
 
+    # Escape sequences that would break the <script type="text/plain"> data blob
+    # if a message text happens to contain them (e.g. </script> in a Tableau embed).
+    # JSON allows \/ for /, so JSON.parse on the receiving end handles this correctly.
+    json_data = (
+        json.dumps(data)
+        .replace("</script>", r"<\/script>")
+        .replace("<!--", r"<\!--")
+    )
+
     with open(TEMPLATE_FILE, "r", encoding="utf-8") as f:
         html = f.read()
-    html = html.replace("__IMESSAGE_DATA__", json.dumps(data))
+    html = html.replace("__IMESSAGE_DATA__", json_data)
 
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
         f.write(html)
@@ -931,7 +979,7 @@ def main():
     if os.path.exists(LOOKUP_TEMPLATE_FILE):
         with open(LOOKUP_TEMPLATE_FILE, "r", encoding="utf-8") as f:
             lookup_html = f.read()
-        lookup_html = lookup_html.replace("__IMESSAGE_DATA__", json.dumps(data))
+        lookup_html = lookup_html.replace("__IMESSAGE_DATA__", json_data)
         with open(LOOKUP_OUTPUT_FILE, "w", encoding="utf-8") as f:
             f.write(lookup_html)
         print(f"Done. Open: {OUTPUT_FILE}")
