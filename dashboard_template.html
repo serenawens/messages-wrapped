@@ -91,11 +91,25 @@
   .lookup-profile-sub{font-family:var(--font-mono);font-size:12px;color:var(--muted);margin-top:4px;}
 
   .reply-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:14px;}
-  .reply-card{background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:16px;text-align:center;}
+  .reply-card{background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:16px;}
   .reply-label{font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em;}
   .reply-value{font-family:var(--font-mono);font-size:22px;font-weight:600;}
   .reply-value.teal{color:var(--teal);}
   .reply-value.amber{color:var(--amber);}
+  .reply-distro{margin-top:14px;text-align:left;}
+  .reply-distro-bar{display:flex;height:24px;border-radius:6px;overflow:hidden;background:var(--panel);border:1px solid var(--border);}
+  .reply-distro-seg{height:100%;min-width:3px;}
+  .reply-distro-legend{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;margin-top:12px;}
+  .reply-distro-item{display:flex;align-items:center;gap:7px;font-family:var(--font-mono);font-size:10.5px;color:var(--text);}
+  .reply-distro-swatch{width:10px;height:10px;border-radius:2px;flex-shrink:0;}
+  .reply-distro-label{flex:1;color:var(--muted);}
+  .reply-distro-pct{color:var(--muted);}
+  .reply-summary{margin-top:14px;text-align:left;}
+  .reply-summary-label{font-family:var(--font-mono);font-size:12px;font-weight:600;color:var(--text);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;}
+  .reply-summary-bar{display:flex;height:28px;border-radius:6px;overflow:hidden;border:1px solid var(--border);}
+  .reply-summary-seg{height:100%;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:10px;font-weight:600;color:var(--ink);min-width:28px;}
+  .reply-detail-section{margin-top:16px;text-align:left;}
+  .reply-detail-title{font-family:var(--font-mono);font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em;}
 
   .hour-strip{display:grid;grid-template-columns:repeat(24,1fr);gap:2px;padding:14px;}
   .hour-cell{aspect-ratio:1;border-radius:2px;background:var(--panel-2);}
@@ -156,9 +170,11 @@
   .main-tab-link{
     font-family:var(--font-display);font-size:15px;font-weight:600;color:var(--muted);
     text-decoration:none;padding:0 0 12px;border-bottom:2px solid transparent;margin-bottom:-1px;
-    display:inline-flex;align-items:center;gap:5px;
+    display:inline-flex;align-items:center;gap:6px;
   }
+  .main-tab-link svg{width:15px;height:15px;flex-shrink:0;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;}
   .main-tab-link:hover{color:var(--teal);}
+  .tab-pane{display:none;}
 
   /* Sections */
   .section{margin-bottom:38px;}
@@ -192,6 +208,10 @@
   .subpanel{background:var(--panel-2);margin:0 12px 8px;border-radius:8px;padding:10px 12px;border:1px solid var(--border);}
   .subpanel .rank-row{grid-template-columns:20px 1fr 140px 50px;padding:7px 4px;}
   .subpanel .rank-bar-fill{background:var(--amber);}
+
+  .chart-range-badge{display:inline-flex;margin:10px 14px 0;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--panel-2);color:var(--muted);font-family:var(--font-mono);font-size:10px;}
+  .trend-month{font-family:var(--font-mono);font-size:11px;color:var(--text);background:var(--panel);border:1px solid var(--border);padding:5px 8px;border-radius:6px;cursor:pointer;}
+  .trend-controls{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;}
 
   /* Two column grid */
   .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;}
@@ -279,13 +299,18 @@ const DATA = JSON.parse(document.getElementById('data-blob').textContent);
 
 const state = {
   rangeKey: 'all', vocabAudience: 'overall', vocabGram: 'unigrams', openChat: null, collapsed: {},
-  mainTab: 'people-groups', lookupQuery: '', lookupPersonId: null, _focusLookup: false, _lookupCursor: null,
-  emojiYear: 'all', emojiAud: 'overall',
-  lenYear: 'all',
+  mainTab: 'people-groups',
+  emojiAud: 'overall',
   longestSide: 'sent', longestExpanded: {},
+  mainTrendMode: 'weekly', mainTrendMonth: 'all', mainTrendAllMode: 'monthly',
 };
 
-function setMainTab(t){ state.mainTab = t; render(); }
+function setMainTab(t){
+  if(t===state.mainTab) return;
+  state._chartRise=(t==='patterns'||t==='all-time');
+  state.mainTab=t;
+  switchMainTab();
+}
 
 function toggleSection(id){
   state.collapsed[id] = !state.collapsed[id];
@@ -329,8 +354,11 @@ const RANGES = buildRanges();
 function computeRangeBounds(key, minTs, maxTs){
   if(key==='all') return {start:minTs, end:maxTs};
   const year = parseInt(key,10);
+  const now = new Date();
   const start = new Date(year, 0, 1, 0, 0, 0, 0).getTime();
-  const end = new Date(year, 11, 31, 23, 59, 59, 999).getTime();
+  const end = year === now.getFullYear()
+    ? Math.min(now.getTime(), maxTs)
+    : new Date(year, 11, 31, 23, 59, 59, 999).getTime();
   return {start, end};
 }
 
@@ -400,6 +428,105 @@ function computeAggregates(range){
   return {sent, received, total: sent+received, topContacts, topChats, disparities, dayEntries, heat};
 }
 
+const _aggCache={};
+function getAggregates(rangeKey){
+  if(_aggCache[rangeKey]) return _aggCache[rangeKey];
+  const range=computeRangeBounds(rangeKey, DATA.meta.date_min, DATA.meta.date_max);
+  _aggCache[rangeKey]=computeAggregates(range);
+  return _aggCache[rangeKey];
+}
+
+let _yearlyStatsCache=null;
+function getYearlyStats(){
+  if(!_yearlyStatsCache) _yearlyStatsCache=computeYearlyStats();
+  return _yearlyStatsCache;
+}
+
+function updateMainTabButtons(){
+  document.querySelectorAll('.main-tab[data-tab]').forEach(btn=>{
+    btn.classList.toggle('active', btn.dataset.tab===state.mainTab);
+  });
+}
+
+function initTabCharts(rise){
+  if(state.mainTab==='patterns') renderMainTrend(!!rise);
+  if(state.mainTab==='all-time') animatedDrawYearly('yearly-canvas', getYearlyStats(), {rise:!!rise});
+}
+
+function invalidateMainTabs(){
+  state._tabBuilt={};
+}
+
+function buildPeopleGroupsTab(agg){
+  const contactMax=agg.topContacts.length?agg.topContacts[0].count:0;
+  const chatMax=agg.topChats.length?agg.topChats[0].count:0;
+  const contactsHtml=agg.topContacts.length
+    ? `<div class="legend-row" style="padding-top:0;margin-bottom:4px;">
+         <span class="legend-item"><span class="dot dot-you"></span>Sent</span>
+         <span class="legend-item"><span class="dot dot-them"></span>Received</span>
+       </div>`+
+      agg.topContacts.map((c,i)=>splitRankRowHtml(i+1,c.name,c.sent,c.received,contactMax,contactTip(c.id))).join('')
+    : '<div class="empty">No messages in this range.</div>';
+  const chatsHtml=agg.topChats.length
+    ? agg.topChats.map((c,i)=>groupChatRowHtml(i+1,c,chatMax)).join('')
+    : '<div class="empty">No group chat activity in this range.</div>';
+  return `
+    <div class="grid-2">
+      ${sectionHtml('people','Top 10 People','1:1 conversations only',`<div class="panel">${contactsHtml}</div>`)}
+      ${sectionHtml('groupchats','Top 10 Group Chats','tap to see who talks most',`<div class="panel">${chatsHtml}</div>`)}
+    </div>
+    ${spotlightHtml(agg.topChats)}
+    ${disparitiesHtml(agg.disparities)}
+  `;
+}
+
+function buildPatternsTab(agg){
+  return `
+    ${sectionHtml('activity','Message Trend',
+      state.rangeKey==='all'?(state.mainTrendAllMode==='monthly'?'messages by month · all-time':'messages by year · all-time'):(state.mainTrendMode==='daily'?'daily totals · in range':'weekly totals · in range'),
+      `<div class="panel">
+        <div id="m-trend-controls">${trendControlsHtml('m', state.rangeKey, state.mainTrendMonth, state.mainTrendMode, state.mainTrendAllMode)}</div>
+        <div class="chart-wrap"><canvas id="activity-canvas" style="width:100%;height:200px;"></canvas></div>
+      </div>`)}
+    ${sectionHtml('signal','Signal Pattern','messages by hour &amp; weekday, in range',
+      `<div class="panel">${heatGridHtml(agg.heat)}</div>`)}
+    ${emojiStatsHtml()}
+    ${vocabularyHtml()}
+    ${longestMsgsHtml()}
+  `;
+}
+
+function buildAllTimeTab(){
+  return yearlyComparisonHtml();
+}
+
+function buildTabPane(tab, agg){
+  if(tab==='people-groups') return buildPeopleGroupsTab(agg);
+  if(tab==='patterns') return buildPatternsTab(agg);
+  return buildAllTimeTab();
+}
+
+function showMainTab(tab, agg, rise){
+  agg=agg||getAggregates(state.rangeKey);
+  if(!state._tabBuilt) state._tabBuilt={};
+  const pane=document.getElementById('tab-pane-'+tab);
+  if(!pane) return;
+  const isNew=!state._tabBuilt[tab];
+  if(isNew){
+    pane.innerHTML=buildTabPane(tab, agg);
+    state._tabBuilt[tab]=true;
+    initTabCharts(rise);
+  }
+  document.querySelectorAll('.tab-pane').forEach(p=>{ p.style.display='none'; });
+  pane.style.display='block';
+  updateMainTabButtons();
+}
+
+function switchMainTab(){
+  showMainTab(state.mainTab, null, !!state._chartRise);
+  state._chartRise=false;
+}
+
 function setLookupQuery(el){
   state.lookupQuery = el.value;
   state.lookupPersonId = null;
@@ -444,6 +571,49 @@ function formatHourLabel(h){
   return `${displayHour} ${period}`;
 }
 
+const REPLY_UNDER_KEYS=['<1m','1–5m','5–15m'];
+const REPLY_OVER_KEYS=['15–30m','30m–1h','1–6h','6–24h','Over 1 day'];
+const REPLY_LONG_KEYS=['1–3 days','3 days – 1 week','1–2 weeks','Over 2 weeks'];
+const REPLY_COLORS_TEAL=['#5EEAD4','#3DD4BE','#2BBDA8','#22A894','#1A9280','#147A6A','#0E6456'];
+const REPLY_COLORS_AMBER=['#F2A65A','#E89448','#DE8236','#D47028','#CA5E1C','#C04C12','#B63A08'];
+function replyDetailSection(title, buckets, keys, colors, offset){
+  const entries=keys.map((k,i)=>[k,buckets[k]||0,i]).filter(([,v])=>v>0);
+  if(!entries.length) return '';
+  const bar=entries.map(([k,v,i])=>`<div class="reply-distro-seg" style="width:${v}%;background:${colors[offset+i]}" title="${k}: ${v}%"></div>`).join('');
+  const legend=keys.map((k,i)=>{
+    const v=buckets[k]||0; if(!v) return '';
+    return `<div class="reply-distro-item"><div class="reply-distro-swatch" style="background:${colors[offset+i]}"></div><span class="reply-distro-label">${k}</span><span class="reply-distro-pct">${v}%</span></div>`;
+  }).join('');
+  return `<div class="reply-detail-section"><div class="reply-detail-title">${title}</div><div class="reply-distro-bar">${bar}</div><div class="reply-distro-legend">${legend}</div></div>`;
+}
+function replyDistributionHtml(pcts, palette){
+  if(!pcts||!Object.keys(pcts).length) return '<div class="empty">Not enough reply data.</div>';
+  const colors=palette==='amber'?REPLY_COLORS_AMBER:REPLY_COLORS_TEAL;
+  if(pcts.summary){
+    const under=pcts.summary.under_15||0, over=pcts.summary.over_15||0;
+    const quickColor=colors[0], slowColor=colors[4];
+    const summary=`<div class="reply-summary">
+      <div class="reply-summary-label">Quick vs slow replies</div>
+      <div class="reply-summary-bar">
+        ${under?`<div class="reply-summary-seg" style="width:${under}%;background:${quickColor}">${under}%</div>`:''}
+        ${over?`<div class="reply-summary-seg" style="width:${over}%;background:${slowColor}">${over}%</div>`:''}
+      </div>
+      <div class="reply-distro-legend" style="margin-top:8px;">
+        <div class="reply-distro-item"><div class="reply-distro-swatch" style="background:${quickColor}"></div><span class="reply-distro-label">Under 15 min</span><span class="reply-distro-pct">${under}%</span></div>
+        <div class="reply-distro-item"><div class="reply-distro-swatch" style="background:${slowColor}"></div><span class="reply-distro-label">Over 15 min</span><span class="reply-distro-pct">${over}%</span></div>
+      </div>
+    </div>`;
+    let html=summary
+      +replyDetailSection('Under 15 min · % of quick replies', pcts.under||{}, REPLY_UNDER_KEYS, colors, 0)
+      +replyDetailSection('Over 15 min · % of slow replies', pcts.over||{}, REPLY_OVER_KEYS, colors, 2);
+    if(pcts.over_long){
+      html+=replyDetailSection('Over 1 day · % of multi-day replies', pcts.over_long, REPLY_LONG_KEYS, colors, 4);
+    }
+    return html;
+  }
+  return '<div class="empty">Not enough reply data.</div>';
+}
+
 function getPersonProfile(personId){
   // Use precomputed profile from Python — instant, no message iteration
   const p = (DATA.person_profiles || {})[personId] || {};
@@ -486,11 +656,8 @@ function hourlyStripHtml(hourCounts){
   return `<div class="hour-strip">${cells}</div><div style="display:grid;grid-template-columns:repeat(24,1fr);padding:0 14px 8px">${labelRow}</div>`;
 }
 
-function responsePctsHtml(pcts, cls){
-  if(!pcts || !Object.keys(pcts).length) return '<div class="empty">Not enough data.</div>';
-  return Object.entries(pcts).map(([k,v])=>
-    `<div class="gp-type-row"><div class="gp-type-name" style="font-family:var(--font-mono);font-size:12px">within ${k}</div><div style="flex:1;margin:0 8px"><div class="rank-bar-track"><div class="rank-bar-fill ${cls}" style="width:${v}%"></div></div></div><div class="gp-type-count">${v}%</div></div>`
-  ).join('');
+function responsePctsHtml(pcts, palette){
+  return replyDistributionHtml(pcts, palette==='received'?'amber':'teal');
 }
 
 function renderPersonProfile(p){
@@ -537,7 +704,7 @@ function renderPersonProfile(p){
         <div class="hero-stat"><div class="num">${p.hasOneOnOne && p.hourCounts ? formatHourLabel(p.peakHour) : '—'}</div><div class="label">They usually text</div></div>
       </div>
 
-      ${sectionHtml('lookup-reply', 'Reply Times', 'burst-based · 1:1 only · gaps under 48h', `
+      ${sectionHtml('lookup-reply', 'Reply Times', 'median reply · how fast each side typically responds', `
         <div class="reply-grid">
           <div class="reply-card">
             <div class="reply-label">Your median reply</div>
@@ -809,32 +976,66 @@ function longestMsgsHtml(){
   `);
 }
 
-function vocabularyHtml(){
-  const items = (DATA.word_freq[state.vocabGram] && DATA.word_freq[state.vocabGram][state.vocabAudience]) || [];
-  const isMessages = state.vocabGram === 'messages';
+function isCountableMessage(text){
+  const stripped=String(text||'').replace(/[\ufffc\ufeff\u200b\u200c\u200d\u2060]/g,'').trim();
+  if(stripped.length<2||!/\w/.test(stripped)) return false;
+  if(/https?:\/\/|www\./i.test(stripped)) return false;
+  const tokens=stripped.toLowerCase().split(/\s+/);
+  const urlBits=new Set(['http','https','www','com','org','net','io','youtube','youtu','tiktok','instagram','vm','tik']);
+  const urlish=tokens.filter(t=>urlBits.has(t.replace(/[^a-z0-9]/g,''))).length;
+  return !(urlish&&urlish>=Math.max(1,Math.ceil(tokens.length/2)));
+}
+function isVocabItem(text){
+  return isCountableMessage(text);
+}
 
-  let body;
-  if(items.length === 0){
-    body = '<div class="empty">No repeated text found for this filter.</div>';
-  } else if(isMessages){
-    const max = items[0][1];
-    body = items.slice(0,25).map((pair,i)=>rankRowHtml(i+1, pair[0], pair[1], max)).join('');
+function vocabularyHtml(){
+  const yr=state.rangeKey||'all';
+  const isMessages=state.vocabGram==='messages';
+  let items;
+  if(yr==='all'){
+    const rawItems=(DATA.word_freq[state.vocabGram]&&DATA.word_freq[state.vocabGram][state.vocabAudience])||[];
+    items=isMessages?rawItems.filter(([text])=>isCountableMessage(text)):rawItems.filter(([text])=>isVocabItem(text));
   } else {
-    body = items.slice(0,60).map(([w,c])=>
-      `<div class="word-chip"><b>${esc(w)}</b><span class="n">${fmt(c)}</span></div>`
-    ).join('');
-    body = `<div class="word-cloud">${body}</div>`;
+    const byYear=(DATA.word_freq.by_year||{})[state.vocabGram]||{};
+    const sentY=(byYear.sent||{})[yr]||[];
+    const recvY=(byYear.received||{})[yr]||[];
+    if(state.vocabAudience==='sent') items=sentY;
+    else if(state.vocabAudience==='received') items=recvY;
+    else {
+      const m={};
+      for(const [w,c] of sentY) m[w]=(m[w]||0)+c;
+      for(const [w,c] of recvY) m[w]=(m[w]||0)+c;
+      items=Object.entries(m).sort((a,b)=>b[1]-a[1]);
+    }
+    items=isMessages?items.filter(([text])=>isCountableMessage(text)):items.filter(([text])=>isVocabItem(text));
   }
 
-  const audTab = (key,label) => `<button class="tab-btn${state.vocabAudience===key?' active':''}" onclick="setVocabAudience('${key}')">${label}</button>`;
-  const gramTab = (key,label) => `<button class="tab-btn${state.vocabGram===key?' active':''}" onclick="setVocabGram('${key}')">${label}</button>`;
-  const note = isMessages
-    ? 'exact texts sent more than once &middot; all-time'
-    : 'all-time, not affected by date range';
-  return sectionHtml('vocabulary', 'Vocabulary', note, `
+  let body;
+  if(items.length===0){
+    body='<div class="empty">No repeated text found for this filter.</div>';
+  } else if(isMessages){
+    const max=items[0][1];
+    body=items.slice(0,25).map((pair,i)=>rankRowHtml(i+1,pair[0],pair[1],max)).join('');
+  } else {
+    body=items.slice(0,60).map(([w,c])=>
+      `<div class="word-chip"><b>${esc(w)}</b><span class="n">${fmt(c)}</span></div>`
+    ).join('');
+    body=`<div class="word-cloud">${body}</div>`;
+  }
+
+  const audTab=(key,label)=>`<button class="tab-btn${state.vocabAudience===key?' active':''}" onclick="setVocabAudience('${key}')">${label}</button>`;
+  const gramTab=(key,label)=>`<button class="tab-btn${state.vocabGram===key?' active':''}" onclick="setVocabGram('${key}')">${label}</button>`;
+  const rangeLabel=yr==='all'?'all-time':yr;
+  const note=isMessages
+    ? `exact texts sent more than once · ${rangeLabel}`
+    : state.vocabGram==='bigrams'
+      ? `common 2–5 word phrases · ${rangeLabel}`
+      : `top words · ${rangeLabel}`;
+  return sectionHtml('vocabulary','Vocabulary',note,`
     <div class="tab-row" style="margin-top:-4px;">
       <div class="tabs">${audTab('overall','Overall')}${audTab('sent','You')}${audTab('received','Everyone else')}</div>
-      <div class="tabs">${gramTab('unigrams','Words')}${gramTab('bigrams','Phrases')}${gramTab('messages','Full messages')}</div>
+      <div class="tabs">${gramTab('unigrams','Words')}${gramTab('bigrams','Phrases (2–5 words)')}${gramTab('messages','Full messages')}</div>
     </div>
     <div class="panel">${body}</div>
   `);
@@ -868,7 +1069,9 @@ function yearlyComparisonHtml(){
   `);
 }
 
-function drawYearlyChart(stats){
+function drawYearlyChart(stats, opts){
+  opts=opts||{};
+  const progress=opts.progress!=null?opts.progress:1;
   const canvas = document.getElementById('yearly-canvas');
   if(!canvas) return;
   const ctx = canvas.getContext('2d');
@@ -881,10 +1084,11 @@ function drawYearlyChart(stats){
   if(stats.length===0) return;
 
   const maxV = Math.max(...stats.map(s=>Math.max(s.sent,s.received)),1);
-  const padLeft=30, padRight=10, padTop=10, padBottom=36;
-  const plotW = w-padLeft-padRight, plotH = h-padTop-padBottom;
-
   function fmtY(v){ v=Math.round(v); return v>=1e6?Math.round(v/1e6)+'M':v>=1000?Math.round(v/1000)+'K':String(v); }
+  ctx.font = '9px IBM Plex Mono, monospace';
+  const maxLW = ctx.measureText(fmtY(maxV)).width;
+  const padLeft = Math.ceil(maxLW)+22, padRight=10, padTop=10, padBottom=36;
+  const plotW = w-padLeft-padRight, plotH = h-padTop-padBottom;
 
   ctx.strokeStyle = '#26313C';
   ctx.lineWidth = 1;
@@ -894,7 +1098,7 @@ function drawYearlyChart(stats){
     const y = padTop + plotH*i/3;
     ctx.beginPath(); ctx.moveTo(padLeft,y); ctx.lineTo(w-padRight,y); ctx.stroke();
     const val = maxV*(1-i/3);
-    if(val > 0) ctx.fillText(fmtY(val), padLeft-4, y);
+    if(val > 0) ctx.fillText(fmtY(val), padLeft-8, y);
   }
 
   const n = stats.length;
@@ -909,8 +1113,8 @@ function drawYearlyChart(stats){
 
   stats.forEach((s,i)=>{
     const groupCenter = padLeft + groupW*i + groupW/2;
-    const sentH = (s.sent/maxV)*plotH;
-    const recvH = (s.received/maxV)*plotH;
+    const sentH = (s.sent/maxV)*plotH*progress;
+    const recvH = (s.received/maxV)*plotH*progress;
     const sentX = groupCenter - barW - gap/2;
     const recvX = groupCenter + gap/2;
 
@@ -931,16 +1135,14 @@ function drawYearlyChart(stats){
   ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
   ctx.fillText('Year', padLeft + plotW/2, h - 3);
 
-  // Y-axis title (rotated)
   ctx.save();
-  ctx.translate(10, padTop + plotH/2);
-  ctx.rotate(-Math.PI/2);
+  ctx.translate(9, padTop + plotH/2); ctx.rotate(-Math.PI/2);
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.font = '9px IBM Plex Mono, monospace'; ctx.fillStyle = '#8492A0';
   ctx.fillText('Messages', 0, 0);
   ctx.restore();
 
-  canvas.onmousemove = function(e){
+  canvas.onmousemove = opts.animating ? null : function(e){
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const hit = bars.find(b=>x>=b.x0 && x<=b.x1);
@@ -950,7 +1152,7 @@ function drawYearlyChart(stats){
       hideTip();
     }
   };
-  canvas.onmouseleave = function(){ hideTip(); };
+  canvas.onmouseleave = opts.animating ? null : function(){ hideTip(); };
 }
 
 function disparitiesHtml(items){
@@ -1054,7 +1256,221 @@ function pickTickIndices(n, maxTicks){
   return Array.from(new Set(ticks));
 }
 
-function drawActivityChart(dayEntries){
+// ── Trend range model + series builders (shared with Lookup semantics) ────
+function aggregateYearlyMap(map){
+  const ym={};
+  for(const [k,v] of Object.entries(map||{})){ const y=k.slice(0,4); ym[y]=(ym[y]||0)+v; }
+  return ym;
+}
+function aggregateMonthlyMap(map){
+  const mm={};
+  for(const [k,v] of Object.entries(map||{})){ const mk=k.slice(0,7); mm[mk]=(mm[mk]||0)+v; }
+  return mm;
+}
+function fillYearGaps(yearlyMap){
+  const keys=Object.keys(yearlyMap).sort();
+  if(!keys.length) return yearlyMap;
+  const first=parseInt(keys[0],10), last=parseInt(keys[keys.length-1],10);
+  const out={};
+  for(let y=first;y<=last;y++) out[String(y)]=yearlyMap[String(y)]||0;
+  return out;
+}
+function fillMonthGaps(monthlyMap){
+  const entries=Object.entries(monthlyMap).sort();
+  if(entries.length<=1) return monthlyMap;
+  const [fy,fm]=entries[0][0].split('-').map(Number);
+  const [ly,lm]=entries[entries.length-1][0].split('-').map(Number);
+  const out={}; let y=fy,m=fm;
+  while(y<ly||(y===ly&&m<=lm)){ const mk=y+'-'+String(m).padStart(2,'0'); out[mk]=monthlyMap[mk]||0; m++; if(m>12){m=1;y++;} }
+  return out;
+}
+function fillDayRange(dailyMap, startTs, endTs){
+  const out={};
+  const cur=new Date(startTs); cur.setHours(0,0,0,0);
+  const end=new Date(endTs);
+  while(cur<=end){
+    const dk=cur.getFullYear()+'-'+String(cur.getMonth()+1).padStart(2,'0')+'-'+String(cur.getDate()).padStart(2,'0');
+    out[dk]=dailyMap[dk]||0;
+    cur.setDate(cur.getDate()+1);
+  }
+  return out;
+}
+function dailyToWeeklyTotalMap(dailyMap, minKey){
+  const entries=Object.entries(dailyMap).sort();
+  if(!entries.length) return {};
+  const buckets={};
+  for(const [dk,cnt] of entries){
+    let wk=weekStartKey(dk);
+    if(minKey&&wk<minKey) wk=minKey;
+    buckets[wk]=(buckets[wk]||0)+cnt;
+  }
+  return buckets;
+}
+function trendView(rangeKey, month){
+  const now=new Date();
+  if(rangeKey==='all') return {allTime:true};
+  const y=parseInt(rangeKey,10);
+  if(month&&month!=='all'){
+    const m=parseInt(month,10);
+    const start=new Date(y,m-1,1,0,0,0,0).getTime();
+    let end=new Date(y,m,0,23,59,59,999).getTime();
+    if(y===now.getFullYear()&&m-1===now.getMonth()) end=Math.min(end,now.getTime());
+    return {allTime:false, start, end, month:m};
+  }
+  const start=new Date(y,0,1,0,0,0,0).getTime();
+  let end=(y===now.getFullYear())?now.getTime():new Date(y,11,31,23,59,59,999).getTime();
+  return {allTime:false, start, end};
+}
+// dailyMap: {YYYY-MM-DD: count}. Returns {data, granularity}.
+function buildMainSeries(dailyMap, rangeKey, month, mode, allMode){
+  if(rangeKey==='all'){
+    if(allMode==='monthly') return {data:fillMonthGaps(aggregateMonthlyMap(dailyMap)), granularity:'monthly'};
+    return {data:fillYearGaps(aggregateYearlyMap(dailyMap)), granularity:'yearly'};
+  }
+  const v=trendView(rangeKey, month);
+  const filled=fillDayRange(dailyMap, v.start, v.end);
+  if(mode==='daily') return {data:filled, granularity:'daily'};
+  return {data:dailyToWeeklyTotalMap(filled, tsToDateKey(v.start)), granularity:'weekly'};
+}
+
+function monthOptionsHtml(rangeKey, selected){
+  if(rangeKey==='all') return '';
+  const y=parseInt(rangeKey,10); const now=new Date();
+  const lastM=(y===now.getFullYear())?now.getMonth()+1:12;
+  let opts=`<option value="all"${selected==='all'?' selected':''}>Full Year</option>`;
+  for(let m=1;m<=lastM;m++){
+    const mm=String(m).padStart(2,'0');
+    const lbl=new Date(y,m-1,1).toLocaleDateString('en-US',{month:'short'});
+    opts+=`<option value="${mm}"${selected===mm?' selected':''}>${lbl}</option>`;
+  }
+  return opts;
+}
+function trendBadgeText(rangeKey, month){
+  if(rangeKey==='all') return 'All Time';
+  if(month&&month!=='all'){
+    const y=parseInt(rangeKey,10);
+    return new Date(y,parseInt(month,10)-1,1).toLocaleDateString('en-US',{month:'short',year:'numeric'});
+  }
+  return rangeKey;
+}
+function trendControlsHtml(prefix, rangeKey, month, mode, allMode){
+  const badge=`<div class="chart-range-badge">${esc(trendBadgeText(rangeKey,month))}</div>`;
+  let right='';
+  if(rangeKey==='all'){
+    right=`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:6px 14px 0;">
+      <div class="tabs" style="padding:0;margin:0;">
+        <button class="tab-btn${allMode==='monthly'?' active':''}" onclick="setTrendAllMode('${prefix}','monthly')">Monthly</button>
+        <button class="tab-btn${allMode!=='monthly'?' active':''}" onclick="setTrendAllMode('${prefix}','yearly')">Yearly</button>
+      </div>
+    </div>`;
+  } else {
+    right=`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:6px 14px 0;">
+      <select class="trend-month" onchange="setTrendMonth('${prefix}',this)">${monthOptionsHtml(rangeKey,month)}</select>
+      <div class="tabs" style="padding:0;margin:0;">
+        <button class="tab-btn${mode==='weekly'?' active':''}" onclick="setTrendMode('${prefix}','weekly')">Weekly totals</button>
+        <button class="tab-btn${mode==='daily'?' active':''}" onclick="setTrendMode('${prefix}','daily')">Daily totals</button>
+      </div>
+    </div>`;
+  }
+  return `<div class="trend-controls">${badge}${right}</div>`;
+}
+
+// ── Chart animation (rAF interpolation, reduced-motion aware) ─────────────
+const _chartAnim={};
+function _reduceMotion(){ return !!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches); }
+// Resample a value array to length m by positional linear interpolation, so an
+// old line shape "shifts into" the new one even when point counts differ.
+function _resample(vals, m){
+  if(m<=0) return [];
+  if(!vals.length) return new Array(m).fill(0);
+  if(vals.length===1) return new Array(m).fill(vals[0]);
+  if(m===1) return [vals[vals.length-1]];
+  const out=[];
+  for(let i=0;i<m;i++){
+    const pos=i*(vals.length-1)/(m-1);
+    const lo=Math.floor(pos), hi=Math.ceil(pos), frac=pos-lo;
+    out.push(vals[lo]*(1-frac)+vals[hi]*frac);
+  }
+  return out;
+}
+function _sortedVals(map){ return Object.entries(map||{}).sort((a,b)=>a[0]<b[0]?-1:1).map(e=>e[1]); }
+function _easeOutCubic(t){ return 1-Math.pow(1-t,3); }
+
+function animatedDrawMain(canvasId, targetData, granularity, opts){
+  opts=opts||{};
+  const prev=_chartAnim[canvasId];
+  if(prev&&prev.raf) cancelAnimationFrame(prev.raf);
+  const targetEntries=Object.entries(targetData||{}).sort((a,b)=>a[0]<b[0]?-1:1);
+  const draw=(d,o)=>drawActivityChart(d,granularity,o);
+  if(_reduceMotion()){
+    draw(targetData,{});
+    _chartAnim[canvasId]={data:targetData,granularity,displayed:targetData,raf:null};
+    return;
+  }
+  if(!targetEntries.length){
+    draw(targetData,{});
+    _chartAnim[canvasId]={data:targetData,granularity,displayed:targetData,raf:null};
+    return;
+  }
+  const targetVals=targetEntries.map(e=>e[1]);
+  const targetMax=Math.max(1,...targetVals);
+  const startResampled=opts.rise||!prev
+    ? new Array(targetEntries.length).fill(0)
+    : _resample(_sortedVals(prev.displayed||prev.data||{}), targetEntries.length);
+  const dur=opts.rise?400:320,t0=performance.now();
+  _chartAnim[canvasId]={data:targetData,granularity,displayed:targetData,raf:null};
+  function frame(now){
+    const t=Math.min(1,(now-t0)/dur);const e=_easeOutCubic(t);
+    const cur={};
+    targetEntries.forEach(([k],i)=>{ const sv=startResampled[i]||0; cur[k]=sv+(targetVals[i]-sv)*e; });
+    draw(cur,{scaleMax:targetMax,animating:t<1});
+    _chartAnim[canvasId].displayed=cur;
+    if(t<1) _chartAnim[canvasId].raf=requestAnimationFrame(frame);
+    else _chartAnim[canvasId].raf=null;
+  }
+  _chartAnim[canvasId].raf=requestAnimationFrame(frame);
+}
+
+function animatedDrawYearly(canvasId, stats, opts){
+  opts=opts||{};
+  const prev=_chartAnim[canvasId];
+  if(prev&&prev.raf) cancelAnimationFrame(prev.raf);
+  if(_reduceMotion()||!stats.length){
+    drawYearlyChart(stats,{});
+    _chartAnim[canvasId]={data:stats,displayed:stats,raf:null};
+    return;
+  }
+  const dur=400,t0=performance.now();
+  const startProgress=opts.rise||!prev?0:(prev.progress!=null?prev.progress:1);
+  _chartAnim[canvasId]={data:stats,displayed:stats,raf:null,progress:startProgress};
+  function frame(now){
+    const t=Math.min(1,(now-t0)/dur);const e=_easeOutCubic(t);
+    const progress=startProgress+(1-startProgress)*e;
+    drawYearlyChart(stats,{progress,animating:t<1});
+    _chartAnim[canvasId].progress=progress;
+    if(t<1) _chartAnim[canvasId].raf=requestAnimationFrame(frame);
+    else{ _chartAnim[canvasId].raf=null; _chartAnim[canvasId].progress=1; }
+  }
+  _chartAnim[canvasId].raf=requestAnimationFrame(frame);
+}
+
+function setTrendMode(prefix, mode){ state.mainTrendMode=mode; renderMainTrend(); }
+function setTrendMonth(prefix, el){ state.mainTrendMonth=el.value; renderMainTrend(); }
+function setTrendAllMode(prefix, m){ state.mainTrendAllMode=m; renderMainTrend(); }
+function renderMainTrend(rise){
+  if(state.mainTab!=='patterns') return;
+  const ctrls=document.getElementById('m-trend-controls');
+  if(ctrls) ctrls.innerHTML=trendControlsHtml('m', state.rangeKey, state.mainTrendMonth, state.mainTrendMode, state.mainTrendAllMode);
+  const agg=getAggregates(state.rangeKey);
+  const dailyMap=Object.fromEntries(agg.dayEntries);
+  const s=buildMainSeries(dailyMap, state.rangeKey, state.mainTrendMonth, state.mainTrendMode, state.mainTrendAllMode);
+  animatedDrawMain('activity-canvas', s.data, s.granularity, {rise:!!rise});
+}
+
+// data: {key: value} map. granularity: 'yearly'|'daily'|'weekly'|'monthly'.
+// opts: {scaleMax, animating}
+function drawActivityChart(data, granularity, opts){
+  opts = opts || {}; granularity = granularity || 'weekly';
   const canvas = document.getElementById('activity-canvas');
   if(!canvas) return;
   const ctx = canvas.getContext('2d');
@@ -1064,18 +1480,35 @@ function drawActivityChart(dayEntries){
   canvas.width = w*dpr; canvas.height = h*dpr;
   ctx.scale(dpr,dpr);
   ctx.clearRect(0,0,w,h);
-  if(dayEntries.length===0) return;
 
+  const dayEntries = Object.entries(data||{}).sort((a,b)=>a[0]<b[0]?-1:1);
   const vals = dayEntries.map(e=>e[1]);
-  const maxV = Math.max(...vals,1);
-  const padLeft = 30, padRight = 10, padTop = 10, padBottom = 36;
+  function showEmpty(){
+    ctx.clearRect(0,0,w,h);
+    ctx.fillStyle='#8492A0'; ctx.font='13px IBM Plex Mono, monospace';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('No messages during this period.', w/2, h/2);
+    canvas.onmousemove=null; canvas.onmouseleave=null;
+  }
+  if(!dayEntries.length || vals.every(v=>v===0)){ showEmpty(); return; }
+
+  const maxV = Math.max(opts.scaleMax||0, ...vals, 1);
+
+  const isYearly = granularity==='yearly';
+  const isWeekly = granularity==='weekly';
+  const isDay = granularity==='daily' || granularity==='weekly';
+
+  function fmtY(v){ v=Math.round(v); return v>=1e6?Math.round(v/1e6)+'M':v>=1000?Math.round(v/1000)+'K':String(v); }
+  ctx.font = '9px IBM Plex Mono, monospace';
+  const maxLW = ctx.measureText(fmtY(maxV)).width;
+  const padLeft = Math.ceil(maxLW) + 22;
+  const padRight = 10, padTop = 10, padBottom = 36;
   const plotW = w - padLeft - padRight, plotH = h - padTop - padBottom;
-  const years = new Set(dayEntries.map(e=>e[0].slice(0,4)));
-  const multiYear = years.size > 1;
+  const multiYear = new Set(dayEntries.map(e=>e[0].slice(0,4))).size > 1;
   const n = dayEntries.length;
   const stepX = n>1 ? plotW/(n-1) : 0;
 
-  function ptX(i){ return padLeft + i*stepX; }
+  function ptX(i){ return n>1 ? padLeft+i*stepX : padLeft+plotW/2; }
   function ptY(v){ return padTop + plotH - (v/maxV)*plotH; }
 
   const grad = ctx.createLinearGradient(0,padTop,0,padTop+plotH);
@@ -1083,13 +1516,31 @@ function drawActivityChart(dayEntries){
 
   const maxTicks = w < 500 ? 4 : 6;
   const tickIdx = pickTickIndices(n, maxTicks);
+  const yTitle = 'Messages';
+  const xTitle = isYearly ? 'Year' : (isWeekly ? 'Week' : (isDay ? 'Date' : 'Month'));
 
-  function fmtY(v){ v=Math.round(v); return v>=1e6?Math.round(v/1e6)+'M':v>=1000?Math.round(v/1000)+'K':String(v); }
+  function fmtAxisLabel(key){
+    if(isYearly) return key;
+    if(isDay) return formatAxisDate(key, multiYear);
+    const [y,mo]=key.split('-').map(Number);
+    const abbr=new Date(y,mo-1,1).toLocaleDateString('en-US',{month:'short'});
+    return multiYear?`${abbr} '${String(y).slice(2)}`:abbr;
+  }
+  function fmtTip(key, val){
+    if(isYearly) return `${key} — ${fmt(val)} messages`;
+    if(isWeekly) return `Week of ${formatAxisDate(key, multiYear)} — ${fmt(val)} messages`;
+    if(isDay){
+      const [y,m,d]=key.split('-').map(Number);
+      const label=new Date(y,m-1,d).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+      return `${label} — ${fmt(val)} messages`;
+    }
+    const [y,mo]=key.split('-').map(Number);
+    return `${new Date(y,mo-1,1).toLocaleDateString('en-US',{month:'short',year:'numeric'})} — ${fmt(val)} messages`;
+  }
 
   function drawBase(){
     ctx.clearRect(0,0,w,h);
 
-    // Grid lines + y-axis value labels
     ctx.strokeStyle = '#26313C'; ctx.lineWidth = 1;
     ctx.fillStyle = '#8492A0'; ctx.font = '9px IBM Plex Mono, monospace';
     ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
@@ -1097,45 +1548,45 @@ function drawActivityChart(dayEntries){
       const y = padTop + plotH*i/3;
       ctx.beginPath(); ctx.moveTo(padLeft,y); ctx.lineTo(w-padRight,y); ctx.stroke();
       const val = maxV*(1-i/3);
-      if(val > 0) ctx.fillText(fmtY(val), padLeft-4, y);
+      if(val > 0) ctx.fillText(fmtY(val), padLeft-8, y);
     }
 
-    // Area fill
     ctx.beginPath();
     dayEntries.forEach((e,i)=>{ const x=ptX(i),y=ptY(e[1]); if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); });
-    ctx.lineTo(ptX(n-1),padTop+plotH); ctx.lineTo(padLeft,padTop+plotH);
+    if(n>1){ ctx.lineTo(ptX(n-1),padTop+plotH); ctx.lineTo(padLeft,padTop+plotH); }
     ctx.closePath(); ctx.fillStyle = grad; ctx.fill();
 
-    // Line
-    ctx.beginPath();
-    dayEntries.forEach((e,i)=>{ const x=ptX(i),y=ptY(e[1]); if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); });
-    ctx.strokeStyle = '#5EEAD4'; ctx.lineWidth = 1.6;
-    ctx.shadowColor = 'rgba(94,234,212,0.6)'; ctx.shadowBlur = 4; ctx.stroke(); ctx.shadowBlur = 0;
+    if(n>1){
+      ctx.beginPath();
+      dayEntries.forEach((e,i)=>{ const x=ptX(i),y=ptY(e[1]); if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); });
+      ctx.strokeStyle = '#5EEAD4'; ctx.lineWidth = 1.6;
+      ctx.shadowColor = 'rgba(94,234,212,0.6)'; ctx.shadowBlur = 4; ctx.stroke(); ctx.shadowBlur = 0;
+    }
+    if(n===1){
+      const dx=ptX(0),dy=ptY(dayEntries[0][1]);
+      ctx.beginPath();ctx.arc(dx,dy,4.5,0,Math.PI*2);
+      ctx.fillStyle='#5EEAD4';ctx.shadowColor='rgba(94,234,212,0.7)';ctx.shadowBlur=8;ctx.fill();ctx.shadowBlur=0;
+      ctx.beginPath();ctx.arc(dx,dy,2.5,0,Math.PI*2);ctx.fillStyle='#0D1117';ctx.fill();
+    }
 
-    // Axis tick marks and labels
     ctx.strokeStyle = '#26313C'; ctx.fillStyle = '#8492A0';
-    ctx.font = '10px IBM Plex Mono, monospace'; ctx.textBaseline = 'top';
+    ctx.font = (isYearly?'11':'10')+'px IBM Plex Mono, monospace'; ctx.textBaseline = 'top';
     tickIdx.forEach(i=>{
       const x = ptX(i);
       ctx.beginPath(); ctx.moveTo(x,padTop+plotH); ctx.lineTo(x,padTop+plotH+4); ctx.stroke();
-      const label = formatAxisDate(dayEntries[i][0], multiYear);
       ctx.textAlign = i===0 ? 'left' : i===n-1 ? 'right' : 'center';
-      ctx.fillText(label, x, padTop+plotH+7);
+      ctx.fillText(fmtAxisLabel(dayEntries[i][0]), x, padTop+plotH+7);
     });
 
-    // X-axis title
-    ctx.fillStyle = '#8492A0';
-    ctx.font = '9px IBM Plex Mono, monospace';
+    ctx.fillStyle = '#8492A0'; ctx.font = '9px IBM Plex Mono, monospace';
     ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-    ctx.fillText('Date', padLeft + plotW/2, h - 3);
+    ctx.fillText(xTitle, padLeft + plotW/2, h - 3);
 
-    // Y-axis title (rotated)
     ctx.save();
-    ctx.translate(10, padTop + plotH/2);
-    ctx.rotate(-Math.PI/2);
+    ctx.translate(9, padTop + plotH/2); ctx.rotate(-Math.PI/2);
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.font = '9px IBM Plex Mono, monospace'; ctx.fillStyle = '#8492A0';
-    ctx.fillText('Messages per day', 0, 0);
+    ctx.fillText(yTitle, 0, 0);
     ctx.restore();
   }
 
@@ -1149,14 +1600,17 @@ function drawActivityChart(dayEntries){
 
   drawBase();
 
+  // During animation, don't wire up hover (restored on the final frame).
+  if(opts.animating){ canvas.onmousemove=null; canvas.onmouseleave=null; return; }
+
   let lastDotIdx = -1;
   canvas.onmousemove = function(e){
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     let idx = stepX>0 ? Math.round((x-padLeft)/stepX) : 0;
     idx = Math.max(0, Math.min(n-1, idx));
-    const [key, count] = dayEntries[idx];
-    showTip(e, `Week of ${formatAxisDate(key, multiYear)} — avg ${fmt(count)}/day`);
+    const [key, val] = dayEntries[idx];
+    showTip(e, fmtTip(key, val));
     if(idx !== lastDotIdx){
       lastDotIdx = idx;
       drawBase();
@@ -1171,65 +1625,17 @@ function drawActivityChart(dayEntries){
 }
 
 function render(){
-  const minTs = DATA.meta.date_min, maxTs = DATA.meta.date_max;
-  const range = computeRangeBounds(state.rangeKey, minTs, maxTs);
-  const agg = computeAggregates(range);
-  const contactMax = agg.topContacts.length ? agg.topContacts[0].count : 0;
-  const chatMax = agg.topChats.length ? agg.topChats[0].count : 0;
-  const days = Math.max(1, Math.round((range.end-range.start)/(24*3600*1000)));
+  invalidateMainTabs();
+  const minTs=DATA.meta.date_min, maxTs=DATA.meta.date_max;
+  const range=computeRangeBounds(state.rangeKey, minTs, maxTs);
+  const agg=getAggregates(state.rangeKey);
+  const days=Math.max(1, Math.round((range.end-range.start)/(24*3600*1000)));
 
-  const rangeButtons = RANGES.map(r=>
+  const rangeButtons=RANGES.map(r=>
     `<button class="${state.rangeKey===r.key?'active':''}" onclick="setRange('${r.key}')">${r.label}</button>`
   ).join('');
 
-  const contactsHtml = agg.topContacts.length
-    ? `<div class="legend-row" style="padding-top:0;margin-bottom:4px;">
-         <span class="legend-item"><span class="dot dot-you"></span>Sent</span>
-         <span class="legend-item"><span class="dot dot-them"></span>Received</span>
-       </div>` +
-      agg.topContacts.map((c,i)=>splitRankRowHtml(i+1, c.name, c.sent, c.received, contactMax, contactTip(c.id))).join('')
-    : '<div class="empty">No messages in this range.</div>';
-
-  const chatsHtml = agg.topChats.length
-    ? agg.topChats.map((c,i)=>groupChatRowHtml(i+1, c, chatMax)).join('')
-    : '<div class="empty">No group chat activity in this range.</div>';
-
-  const peopleGroupsHtml = `
-    <div class="grid-2">
-      ${sectionHtml('people', 'Top 10 People', '1:1 conversations only', `<div class="panel">${contactsHtml}</div>`)}
-      ${sectionHtml('groupchats', 'Top 10 Group Chats', 'tap to see who talks most', `<div class="panel">${chatsHtml}</div>`)}
-    </div>
-    ${spotlightHtml(agg.topChats)}
-    ${disparitiesHtml(agg.disparities)}
-  `;
-
-  const patternsHtml = `
-    ${sectionHtml('activity', 'Message Trend', 'weekly average, messages per day',
-      `<div class="panel"><div class="chart-wrap"><canvas id="activity-canvas" style="width:100%;height:200px;"></canvas></div></div>`)}
-    ${sectionHtml('signal', 'Signal Pattern', 'messages by hour &amp; weekday, in range',
-      `<div class="panel">${heatGridHtml(agg.heat)}</div>`)}
-    ${emojiStatsHtml()}
-    ${longestMsgsHtml()}
-  `;
-
-  const allTimeHtml = `
-    ${yearlyComparisonHtml()}
-    ${vocabularyHtml()}
-  `;
-
-  const tabBar = `<div class="main-tabs">
-    <button class="main-tab${state.mainTab==='people-groups'?' active':''}" onclick="setMainTab('people-groups')">People &amp; Groups</button>
-    <button class="main-tab${state.mainTab==='patterns'?' active':''}" onclick="setMainTab('patterns')">Patterns</button>
-    <button class="main-tab${state.mainTab==='all-time'?' active':''}" onclick="setMainTab('all-time')">All-Time</button>
-    <div class="main-tab-divider"></div>
-    <a class="main-tab-link" href="iMessage_Dashboard_Lookup.html">Lookup ↗</a>
-  </div>`;
-
-  const tabContent = state.mainTab === 'people-groups' ? peopleGroupsHtml
-    : state.mainTab === 'patterns' ? patternsHtml
-    : allTimeHtml;
-
-  document.getElementById('root').innerHTML = `
+  document.getElementById('root').innerHTML=`
     <div class="wrap">
       <div class="statement-head">
         <div>
@@ -1247,23 +1653,33 @@ function render(){
         <div class="hero-stat"><div class="num">${fmt(agg.total/days)}</div><div class="label">Avg / day</div></div>
       </div>
 
-      ${tabBar}
+      <div class="main-tabs">
+        <button class="main-tab${state.mainTab==='people-groups'?' active':''}" data-tab="people-groups" onclick="setMainTab('people-groups')">People &amp; Groups</button>
+        <button class="main-tab${state.mainTab==='patterns'?' active':''}" data-tab="patterns" onclick="setMainTab('patterns')">Texting Habits</button>
+        <button class="main-tab${state.mainTab==='all-time'?' active':''}" data-tab="all-time" onclick="setMainTab('all-time')">Year over Year</button>
+        <div class="main-tab-divider"></div>
+        <a class="main-tab-link" href="iMessage_Dashboard_Lookup.html"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>Search People &amp; Groups</a>
+      </div>
 
-      ${tabContent}
+      <div id="tab-pane-people-groups" class="tab-pane"></div>
+      <div id="tab-pane-patterns" class="tab-pane"></div>
+      <div id="tab-pane-all-time" class="tab-pane"></div>
 
       <footer>This file runs entirely in your browser. Your message data was embedded locally by build_dashboard.py and never left your machine.</footer>
     </div>
   `;
 
-  if(state.mainTab === 'patterns'){
-    drawActivityChart(toWeeklyAverage(agg.dayEntries, range.start, range.end));
-  }
-  if(state.mainTab === 'all-time'){
-    drawYearlyChart(computeYearlyStats());
-  }
+  showMainTab(state.mainTab, agg, false);
 }
 
-function setRange(key){ state.rangeKey = key; render(); }
+function setRange(key){
+  if(state.rangeKey !== key){
+    state.rangeKey = key;
+    state.mainTrendMonth = 'all';
+    invalidateMainTabs();
+  }
+  render();
+}
 function toggleChat(id){ state.openChat = state.openChat === id ? null : id; render(); }
 function setVocabAudience(a){ state.vocabAudience = a; render(); }
 function setVocabGram(g){

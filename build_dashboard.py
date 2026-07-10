@@ -92,23 +92,80 @@ def _median(lst):
 
 
 def _response_buckets(gaps_ms):
-    """Percentage of responses within each time window."""
+    """Reply-time distribution split at 15 minutes.
+
+    Summary buckets use % of all replies. Detail buckets use % within their
+    parent group (under-15 or over-15 each sum to 100%). When over-1-day
+    replies exceed 2% of all replies, adds an over_long sub-breakdown (% of
+    only those multi-day replies).
+    """
     if not gaps_ms:
         return {}
     n = len(gaps_ms)
-    thresholds = [300_000, 1_800_000, 3_600_000, 21_600_000, 86_400_000]
-    keys = ["5m", "30m", "1h", "6h", "24h", "24h+"]
-    counts = [0] * 6
+    quick_ms = 15 * 60 * 1000
+    one_day = 86_400_000
+    three_days = 3 * one_day
+    one_week = 7 * one_day
+    two_weeks = 14 * one_day
+
+    under_thresholds = [60_000, 300_000, quick_ms]
+    under_keys = ["<1m", "1–5m", "5–15m"]
+    over_thresholds = [1_800_000, 3_600_000, 21_600_000, one_day]
+    over_keys = ["15–30m", "30m–1h", "1–6h", "6–24h", "Over 1 day"]
+    long_thresholds = [three_days, one_week, two_weeks]
+    long_keys = ["1–3 days", "3 days – 1 week", "1–2 weeks", "Over 2 weeks"]
+
+    under_counts = [0, 0, 0]
+    over_counts = [0, 0, 0, 0, 0]
+    long_counts = [0, 0, 0, 0]
+    under_total = over_total = long_total = 0
+
     for g in gaps_ms:
-        placed = False
-        for i, t in enumerate(thresholds):
-            if g <= t:
-                counts[i] += 1
-                placed = True
-                break
-        if not placed:
-            counts[5] += 1
-    return {k: round(c / n * 100) for k, c in zip(keys, counts)}
+        if g <= quick_ms:
+            under_total += 1
+            for i, t in enumerate(under_thresholds):
+                if g <= t:
+                    under_counts[i] += 1
+                    break
+        else:
+            over_total += 1
+            if g > one_day:
+                long_total += 1
+                placed_long = False
+                for i, t in enumerate(long_thresholds):
+                    if g <= t:
+                        long_counts[i] += 1
+                        placed_long = True
+                        break
+                if not placed_long:
+                    long_counts[3] += 1
+            placed = False
+            for i, t in enumerate(over_thresholds):
+                if g <= t:
+                    over_counts[i] += 1
+                    placed = True
+                    break
+            if not placed:
+                over_counts[4] += 1
+
+    def _pct_of(part, whole):
+        return round(part / whole * 100) if whole else 0
+
+    result = {
+        "summary": {
+            "under_15": _pct_of(under_total, n),
+            "over_15": _pct_of(over_total, n),
+        },
+        "under": {k: _pct_of(c, under_total) for k, c in zip(under_keys, under_counts)},
+        "over": {k: _pct_of(c, over_total) for k, c in zip(over_keys, over_counts)},
+    }
+
+    if _pct_of(long_total, n) > 2 and long_total > 0:
+        result["over_long"] = {
+            k: _pct_of(c, long_total) for k, c in zip(long_keys, long_counts)
+        }
+
+    return result
 
 
 def _burst_responses(msgs_sorted):
@@ -135,7 +192,7 @@ def _burst_responses(msgs_sorted):
     your_gaps, their_gaps = [], []
     for i in range(1, len(bursts)):
         gap = bursts[i]["start"] - bursts[i - 1]["end"]
-        if gap <= 0 or gap > 48 * 3_600_000:
+        if gap <= 0 or gap > 30 * 86_400_000:
             continue
         (your_gaps if bursts[i]["s"] == "me" else their_gaps).append(gap)
     return {"your": your_gaps, "their": their_gaps}
@@ -210,22 +267,83 @@ def parse_attributed_body(body):
         return ""
 
 
+# URL patterns and fragments to exclude from vocabulary analysis.
+_URL_RE = re.compile(
+    r"https?://[^\s<>\"']+|www\.[^\s<>\"']+",
+    re.IGNORECASE,
+)
+_URL_FRAGMENTS = frozenset({
+    "http", "https", "www", "com", "org", "net", "io", "co", "edu", "gov",
+    "youtube", "youtu", "tiktok", "instagram", "facebook", "twitter", "vm",
+    "html", "php", "asp", "tik", "watch", "share", "link",
+})
+
+
+def strip_urls(text):
+    return _URL_RE.sub(" ", text or "")
+
+
+def is_vocab_item(text):
+    """Filter URL-heavy tokens/phrases/messages from vocabulary output."""
+    if not text or not str(text).strip():
+        return False
+    lower = str(text).lower().strip()
+    if _URL_RE.search(lower):
+        return False
+    tokens = re.findall(r"[a-z0-9']+", lower)
+    if not tokens:
+        return False
+    urlish = sum(1 for t in tokens if t in _URL_FRAGMENTS)
+    if urlish and urlish >= max(1, len(tokens) // 2):
+        return False
+    return True
+
+
 def tokenize_raw(text):
-    words = re.findall(r"[a-zA-Z']+", text.lower())
-    return [w.strip("'") for w in words if 2 <= len(w) <= 20]
+    text = strip_urls(text)
+    words = re.findall(r"[a-zA-Z]+(?:'[a-zA-Z]+)?", text.lower())
+    return [
+        w for w in words
+        if 2 <= len(w) <= 20 and w not in _URL_FRAGMENTS
+    ]
+
+
+# Object-replacement / zero-width / BOM chars used as attachment placeholders.
+_PLACEHOLDER_CHARS = "\ufffc\ufeff\u200b\u200c\u200d\u2060"
+
+
+def is_countable_full_message(text):
+    """True if a message has real content worth counting as a 'full message'.
+    Filters out attachment/image placeholders and whitespace-only rows that
+    otherwise dominate the frequency list as invisible 'empty' messages."""
+    stripped = text
+    for ch in _PLACEHOLDER_CHARS:
+        stripped = stripped.replace(ch, "")
+    stripped = stripped.strip()
+    if len(stripped) < 2:
+        return False
+    if _URL_RE.search(stripped.lower()):
+        return False
+    # Require at least one alphanumeric word character (unicode-aware).
+    return bool(re.search(r"\w", stripped, re.UNICODE))
 
 
 def unigrams_from_raw(raw_words):
     return [w for w in raw_words if w not in STOPWORDS]
 
 
-def bigrams_from_raw(raw_words):
+def phrases_from_raw(raw_words, nmin=2, nmax=5):
+    """Common phrases of length nmin..nmax words. Phrases must start and end on
+    a non-stopword (cleaner, more meaningful phrases) and contain at least one
+    non-stopword overall."""
     grams = []
-    for i in range(len(raw_words) - 1):
-        w1, w2 = raw_words[i], raw_words[i + 1]
-        if w1 in STOPWORDS and w2 in STOPWORDS:
-            continue
-        grams.append(f"{w1} {w2}")
+    n = len(raw_words)
+    for size in range(nmin, nmax + 1):
+        for i in range(n - size + 1):
+            window = raw_words[i:i + size]
+            if window[0] in STOPWORDS or window[-1] in STOPWORDS:
+                continue
+            grams.append(" ".join(window))
     return grams
 
 
@@ -263,10 +381,9 @@ def find_addressbook_dbs():
 
 def load_mac_contacts():
     """Best-effort read of the macOS Contacts app so handles can be
-    auto-labeled with real names. Returns (phone_lookup, email_lookup,
-    photos_by_pk), all possibly empty if Contacts data isn't present."""
+    auto-labeled with real names. Returns (phone_lookup, email_lookup),
+    both possibly empty if Contacts data isn't present."""
     phone_lookup, email_lookup = {}, {}
-    photos_by_pk: dict = {}           # Z_PK -> base64-encoded JPEG
     dbs = find_addressbook_dbs()
 
     for db_path in dbs:
@@ -303,22 +420,6 @@ def load_mac_contacts():
                 if name and r["addr"]:
                     email_lookup[r["addr"].lower()] = name
 
-            # Best-effort photo extraction — column names vary by macOS version
-            try:
-                cols = {row[1] for row in cur.execute("PRAGMA table_info(ZABCDRECORD)")}
-                photo_col = next(
-                    (c for c in ("ZTHUMBNAILIMAGEDATA", "ZIMAGEDATA", "ZTHUMBNAILIMAGE") if c in cols),
-                    None,
-                )
-                if photo_col:
-                    import base64
-                    for r in cur.execute(f"SELECT Z_PK, {photo_col} FROM ZABCDRECORD WHERE {photo_col} IS NOT NULL"):
-                        pk, data = r[0], r[1]
-                        if data and isinstance(data, (bytes, bytearray)) and len(data) < 500_000:
-                            photos_by_pk[pk] = base64.b64encode(data).decode()
-            except Exception:
-                pass  # photos are optional
-
             conn.close()
         except Exception:
             pass  # best-effort
@@ -326,7 +427,7 @@ def load_mac_contacts():
             if tmp_dir:
                 shutil.rmtree(tmp_dir, ignore_errors=True)
 
-    return phone_lookup, email_lookup, photos_by_pk
+    return phone_lookup, email_lookup
 
 
 def main():
@@ -358,34 +459,8 @@ def main():
     handles_raw = {str(r["hid"]): r["address"] for r in handle_rows}
 
     print("Looking up names in Contacts...")
-    phone_lookup, email_lookup, photos_by_pk = load_mac_contacts()
+    phone_lookup, email_lookup = load_mac_contacts()
     overrides = load_contacts_overrides()
-
-    # We need to track which AddressBook PK belongs to each resolved name so
-    # we can later look up the photo for each canonical contact.
-    # load_mac_contacts returns phone/email -> name; we need name -> pk.
-    # Re-derive this by re-reading the ABs lightly (just the PK+name columns).
-    ab_name_to_pk: dict = {}   # normalized_name -> [pk, ...]  (for photo lookup)
-    for db_path in find_addressbook_dbs():
-        tmp_dir = None
-        try:
-            tmp_dir = tempfile.mkdtemp(prefix="imessage_dash_ab2_")
-            tmp_db = os.path.join(tmp_dir, "ab.db")
-            shutil.copy2(db_path, tmp_db)
-            conn2 = sqlite3.connect(f"file:{tmp_db}?mode=ro", uri=True)
-            for r in conn2.execute(
-                "SELECT Z_PK, ZFIRSTNAME, ZLASTNAME, ZORGANIZATION FROM ZABCDRECORD"
-            ):
-                full = " ".join(p for p in [r[1], r[2]] if p) or r[3] or ""
-                if full:
-                    norm = re.sub(r"\s+", " ", full).strip().lower()
-                    ab_name_to_pk.setdefault(norm, []).append(r[0])
-            conn2.close()
-        except Exception:
-            pass
-        finally:
-            if tmp_dir:
-                shutil.rmtree(tmp_dir, ignore_errors=True)
 
     resolved_name = {}  # hid -> matched name, or None if unresolved
     auto_matched = 0
@@ -440,17 +515,6 @@ def main():
     merged = len(handles_raw) - len(handles)
     if merged:
         print(f"  Consolidated {merged} duplicate handle(s) (same person, multiple numbers/emails).")
-
-    # Map canonical contact IDs to their AddressBook photos (if any)
-    contact_photos: dict = {}
-    if photos_by_pk:
-        for cid, display_name in handles.items():
-            norm = re.sub(r"\s+", " ", display_name).strip().lower()
-            for pk in ab_name_to_pk.get(norm, []):
-                if pk in photos_by_pk:
-                    contact_photos[cid] = photos_by_pk[pk]
-                    break
-        print(f"  Loaded photos for {len(contact_photos)} contact(s).")
 
     print("Loading chats...")
     chat_rows = cur.execute(
@@ -523,6 +587,12 @@ def main():
     uni_sent, uni_received = Counter(), Counter()
     bi_sent, bi_received = Counter(), Counter()
     msg_sent, msg_received = Counter(), Counter()
+    uni_by_year_sent: dict = defaultdict(Counter)
+    uni_by_year_received: dict = defaultdict(Counter)
+    bi_by_year_sent: dict = defaultdict(Counter)
+    bi_by_year_received: dict = defaultdict(Counter)
+    msg_by_year_sent: dict = defaultdict(Counter)
+    msg_by_year_received: dict = defaultdict(Counter)
     chat_uni = defaultdict(Counter)
     chat_bi = defaultdict(Counter)
     chat_msg_count = Counter()
@@ -561,12 +631,16 @@ def main():
     person_chars_received: dict = defaultdict(list)
     person_monthly_sent: dict = defaultdict(Counter)    # pid -> "YYYY-MM" -> count
     person_monthly_received: dict = defaultdict(Counter)
+    person_daily_sent: dict = defaultdict(Counter)      # pid -> "YYYY-MM-DD" -> count
+    person_daily_received: dict = defaultdict(Counter)
 
     # Per-chat detailed tracking (for group chat lookup page)
     chat_emoji: dict = defaultdict(Counter)
     chat_hour_counts: dict = defaultdict(lambda: [0] * 24)
     chat_monthly: dict = defaultdict(Counter)           # chat_id -> "YYYY-MM" -> count
     chat_sender_monthly: dict = defaultdict(lambda: defaultdict(Counter))  # chat_id -> pid -> month -> n
+    chat_daily: dict = defaultdict(Counter)             # chat_id -> "YYYY-MM-DD" -> count
+    chat_sender_daily: dict = defaultdict(lambda: defaultdict(Counter))    # chat_id -> pid -> day -> n
 
     # Map person_id -> their 1:1 chat_id (filled below during message loop)
     person_to_1on1: dict = {}
@@ -597,27 +671,30 @@ def main():
         messages.append([ts, chat_id, sender, 1 if is_from_me else 0, is_game_pigeon])
         chat_msg_count[chat_id] += 1
 
-        # Track hour-of-day for the sender across all chats
-        if not is_from_me and sender:
-            hour = datetime.fromtimestamp(ts / 1000).hour
-            person_hour_counts[sender][hour] += 1
-
         # Per-chat tracking for group chat lookup
-        month_key = datetime.fromtimestamp(ts / 1000).strftime("%Y-%m")
+        msg_dt = datetime.fromtimestamp(ts / 1000)
+        month_key = msg_dt.strftime("%Y-%m")
+        day_key_str = msg_dt.strftime("%Y-%m-%d")
         chat_monthly[chat_id][month_key] += 1
-        hour = datetime.fromtimestamp(ts / 1000).hour
+        chat_daily[chat_id][day_key_str] += 1
+        hour = msg_dt.hour
         chat_hour_counts[chat_id][hour] += 1
         if is_from_me:
             chat_sender_monthly[chat_id]["me"][month_key] += 1
+            chat_sender_daily[chat_id]["me"][day_key_str] += 1
         elif sender:
             chat_sender_monthly[chat_id][sender][month_key] += 1
+            chat_sender_daily[chat_id][sender][day_key_str] += 1
 
         # Per-person 1:1 tracking (for response times, word freq, emojis, lengths)
         is_group_chat = chats[chat_id]["group"]
         other_in_1on1 = None
-        if not is_group_chat and chats[chat_id]["participants"]:
+        if not is_group_chat and len(chats[chat_id]["participants"]) == 1:
             other_in_1on1 = chats[chat_id]["participants"][0]
             person_1on1_ts[other_in_1on1].append((ts, is_from_me))
+            # "When They Text": only messages this person sent to you 1:1
+            if not is_from_me:
+                person_hour_counts[other_in_1on1][msg_dt.hour] += 1
 
         # Game Pigeon tracking
         if is_game_pigeon and bundle:
@@ -643,7 +720,7 @@ def main():
 
         raw = tokenize_raw(clean_text)
         uni = unigrams_from_raw(raw)
-        bi = bigrams_from_raw(raw)
+        bi = phrases_from_raw(raw)
 
         # Emoji extraction
         found_emojis = EMOJI_RE.findall(clean_text)
@@ -680,11 +757,15 @@ def main():
                 elif char_count > yr_heap[0][0]:
                     heapq.heapreplace(yr_heap, entry)
 
+        countable_full = is_countable_full_message(clean_text)
         if is_from_me:
             uni_sent.update(uni)
             bi_sent.update(bi)
-            if clean_text:
+            uni_by_year_sent[year].update(uni)
+            bi_by_year_sent[year].update(bi)
+            if countable_full:
                 msg_sent[clean_text] += 1
+                msg_by_year_sent[year][clean_text] += 1
             if found_emojis:
                 emoji_sent_ctr.update(found_emojis)
                 emoji_by_year_sent[year].update(found_emojis)
@@ -696,11 +777,15 @@ def main():
                 if not is_game_pigeon:
                     person_chars_sent[other_in_1on1].append(len(clean_text))
                 person_monthly_sent[other_in_1on1][month_key] += 1
+                person_daily_sent[other_in_1on1][day_key_str] += 1
         else:
             uni_received.update(uni)
             bi_received.update(bi)
-            if clean_text:
+            uni_by_year_received[year].update(uni)
+            bi_by_year_received[year].update(bi)
+            if countable_full:
                 msg_received[clean_text] += 1
+                msg_by_year_received[year][clean_text] += 1
             if found_emojis:
                 emoji_received_ctr.update(found_emojis)
                 emoji_by_year_received[year].update(found_emojis)
@@ -712,6 +797,7 @@ def main():
                 if not is_game_pigeon:
                     person_chars_received[other_in_1on1].append(len(clean_text))
                 person_monthly_received[other_in_1on1][month_key] += 1
+                person_daily_received[other_in_1on1][day_key_str] += 1
         chat_uni[chat_id].update(uni)
         chat_bi[chat_id].update(bi)
 
@@ -869,6 +955,8 @@ def main():
             "avg_chars_received": _avg(person_chars_received.get(pid, [])),
             "monthly_sent": dict(person_monthly_sent.get(pid, {})),
             "monthly_received": dict(person_monthly_received.get(pid, {})),
+            "daily_sent": dict(person_daily_sent.get(pid, {})),
+            "daily_received": dict(person_daily_received.get(pid, {})),
         }
 
     # ── Group chat profiles (for the Lookup page) ──
@@ -898,8 +986,38 @@ def main():
                 pid: dict(monthly)
                 for pid, monthly in chat_sender_monthly.get(cid, {}).items()
             },
+            "activity_by_day": dict(chat_daily.get(cid, {})),
+            "activity_by_sender_day": {
+                pid: dict(daily)
+                for pid, daily in chat_sender_daily.get(cid, {}).items()
+            },
         }
     print(f"  Built profiles for {len(chat_profiles)} group chats.")
+
+    def _filter_vocab_pairs(pairs, limit, repeated_only=False):
+        out = []
+        for text, count in pairs:
+            if repeated_only:
+                if count <= 1 or not is_countable_full_message(text):
+                    continue
+            if not is_vocab_item(text):
+                continue
+            out.append([text, count])
+            if len(out) >= limit:
+                break
+        return out
+
+    def _serialise_vocab_by_year(sent_by_year, recv_by_year, limit, repeated_only=False):
+        years = sorted(set(sent_by_year) | set(recv_by_year))
+        sent_out, recv_out = {}, {}
+        for y in years:
+            sent_out[str(y)] = _filter_vocab_pairs(
+                sent_by_year[y].most_common(limit * 2), limit, repeated_only
+            )
+            recv_out[str(y)] = _filter_vocab_pairs(
+                recv_by_year[y].most_common(limit * 2), limit, repeated_only
+            )
+        return {"sent": sent_out, "received": recv_out}
 
     data = {
         "meta": {
@@ -914,19 +1032,30 @@ def main():
         "messages": messages,
         "word_freq": {
             "unigrams": {
-                "overall": uni_overall.most_common(200),
-                "sent": uni_sent.most_common(200),
-                "received": uni_received.most_common(200),
+                "overall": _filter_vocab_pairs(uni_overall.most_common(400), 200),
+                "sent": _filter_vocab_pairs(uni_sent.most_common(400), 200),
+                "received": _filter_vocab_pairs(uni_received.most_common(400), 200),
             },
             "bigrams": {
-                "overall": bi_overall.most_common(150),
-                "sent": bi_sent.most_common(150),
-                "received": bi_received.most_common(150),
+                "overall": _filter_vocab_pairs(bi_overall.most_common(300), 150),
+                "sent": _filter_vocab_pairs(bi_sent.most_common(300), 150),
+                "received": _filter_vocab_pairs(bi_received.most_common(300), 150),
             },
             "messages": {
-                "overall": [m for m in msg_overall.most_common(300) if m[1] > 1][:100],
-                "sent": [m for m in msg_sent.most_common(300) if m[1] > 1][:100],
-                "received": [m for m in msg_received.most_common(300) if m[1] > 1][:100],
+                "overall": _filter_vocab_pairs(msg_overall.most_common(300), 100, repeated_only=True),
+                "sent": _filter_vocab_pairs(msg_sent.most_common(300), 100, repeated_only=True),
+                "received": _filter_vocab_pairs(msg_received.most_common(300), 100, repeated_only=True),
+            },
+            "by_year": {
+                "unigrams": _serialise_vocab_by_year(
+                    uni_by_year_sent, uni_by_year_received, 200
+                ),
+                "bigrams": _serialise_vocab_by_year(
+                    bi_by_year_sent, bi_by_year_received, 150
+                ),
+                "messages": _serialise_vocab_by_year(
+                    msg_by_year_sent, msg_by_year_received, 100, repeated_only=True
+                ),
             },
         },
         "chat_word_freq": chat_word_freq,
@@ -943,7 +1072,6 @@ def main():
             "by_type": [[k, v] for k, v in gp_by_type.most_common()],
         },
         "person_profiles": person_profiles,
-        "contact_photos": contact_photos,
         "chat_profiles": chat_profiles,
     }
 
