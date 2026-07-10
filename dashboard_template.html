@@ -193,6 +193,8 @@
   .subpanel .rank-row{grid-template-columns:20px 1fr 140px 50px;padding:7px 4px;}
   .subpanel .rank-bar-fill{background:var(--amber);}
 
+  .chart-range-badge{display:inline-flex;margin:10px 14px 0;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--panel-2);color:var(--muted);font-family:var(--font-mono);font-size:10px;}
+
   /* Two column grid */
   .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;}
   .grid-2 .section{height:100%;}
@@ -279,10 +281,10 @@ const DATA = JSON.parse(document.getElementById('data-blob').textContent);
 
 const state = {
   rangeKey: 'all', vocabAudience: 'overall', vocabGram: 'unigrams', openChat: null, collapsed: {},
-  mainTab: 'people-groups', lookupQuery: '', lookupPersonId: null, _focusLookup: false, _lookupCursor: null,
-  emojiYear: 'all', emojiAud: 'overall',
-  lenYear: 'all',
+  mainTab: 'people-groups',
+  emojiAud: 'overall',
   longestSide: 'sent', longestExpanded: {},
+  mainTrendMode: 'weekly',
 };
 
 function setMainTab(t){ state.mainTab = t; render(); }
@@ -329,8 +331,11 @@ const RANGES = buildRanges();
 function computeRangeBounds(key, minTs, maxTs){
   if(key==='all') return {start:minTs, end:maxTs};
   const year = parseInt(key,10);
+  const now = new Date();
   const start = new Date(year, 0, 1, 0, 0, 0, 0).getTime();
-  const end = new Date(year, 11, 31, 23, 59, 59, 999).getTime();
+  const end = year === now.getFullYear()
+    ? Math.min(now.getTime(), maxTs)
+    : new Date(year, 11, 31, 23, 59, 59, 999).getTime();
   return {start, end};
 }
 
@@ -881,10 +886,11 @@ function drawYearlyChart(stats){
   if(stats.length===0) return;
 
   const maxV = Math.max(...stats.map(s=>Math.max(s.sent,s.received)),1);
-  const padLeft=30, padRight=10, padTop=10, padBottom=36;
-  const plotW = w-padLeft-padRight, plotH = h-padTop-padBottom;
-
   function fmtY(v){ v=Math.round(v); return v>=1e6?Math.round(v/1e6)+'M':v>=1000?Math.round(v/1000)+'K':String(v); }
+  ctx.font = '9px IBM Plex Mono, monospace';
+  const maxLW = ctx.measureText(fmtY(maxV)).width;
+  const padLeft = Math.ceil(maxLW)+22, padRight=10, padTop=10, padBottom=36;
+  const plotW = w-padLeft-padRight, plotH = h-padTop-padBottom;
 
   ctx.strokeStyle = '#26313C';
   ctx.lineWidth = 1;
@@ -894,7 +900,7 @@ function drawYearlyChart(stats){
     const y = padTop + plotH*i/3;
     ctx.beginPath(); ctx.moveTo(padLeft,y); ctx.lineTo(w-padRight,y); ctx.stroke();
     const val = maxV*(1-i/3);
-    if(val > 0) ctx.fillText(fmtY(val), padLeft-4, y);
+    if(val > 0) ctx.fillText(fmtY(val), padLeft-8, y);
   }
 
   const n = stats.length;
@@ -931,10 +937,8 @@ function drawYearlyChart(stats){
   ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
   ctx.fillText('Year', padLeft + plotW/2, h - 3);
 
-  // Y-axis title (rotated)
   ctx.save();
-  ctx.translate(10, padTop + plotH/2);
-  ctx.rotate(-Math.PI/2);
+  ctx.translate(9, padTop + plotH/2); ctx.rotate(-Math.PI/2);
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.font = '9px IBM Plex Mono, monospace'; ctx.fillStyle = '#8492A0';
   ctx.fillText('Messages', 0, 0);
@@ -1054,7 +1058,8 @@ function pickTickIndices(n, maxTicks){
   return Array.from(new Set(ticks));
 }
 
-function drawActivityChart(dayEntries){
+function drawActivityChart(dayEntries, mode){
+  mode = mode || 'weekly';
   const canvas = document.getElementById('activity-canvas');
   if(!canvas) return;
   const ctx = canvas.getContext('2d');
@@ -1068,14 +1073,19 @@ function drawActivityChart(dayEntries){
 
   const vals = dayEntries.map(e=>e[1]);
   const maxV = Math.max(...vals,1);
-  const padLeft = 30, padRight = 10, padTop = 10, padBottom = 36;
+
+  function fmtY(v){ v=Math.round(v); return v>=1e6?Math.round(v/1e6)+'M':v>=1000?Math.round(v/1000)+'K':String(v); }
+  ctx.font = '9px IBM Plex Mono, monospace';
+  const maxLW = ctx.measureText(fmtY(maxV)).width;
+  const padLeft = Math.ceil(maxLW) + 22;
+  const padRight = 10, padTop = 10, padBottom = 36;
   const plotW = w - padLeft - padRight, plotH = h - padTop - padBottom;
   const years = new Set(dayEntries.map(e=>e[0].slice(0,4)));
   const multiYear = years.size > 1;
   const n = dayEntries.length;
   const stepX = n>1 ? plotW/(n-1) : 0;
 
-  function ptX(i){ return padLeft + i*stepX; }
+  function ptX(i){ return n>1 ? padLeft+i*stepX : padLeft+plotW/2; }
   function ptY(v){ return padTop + plotH - (v/maxV)*plotH; }
 
   const grad = ctx.createLinearGradient(0,padTop,0,padTop+plotH);
@@ -1083,13 +1093,20 @@ function drawActivityChart(dayEntries){
 
   const maxTicks = w < 500 ? 4 : 6;
   const tickIdx = pickTickIndices(n, maxTicks);
+  const yTitle = mode==='weekly' ? 'Msg/day' : 'Messages';
 
-  function fmtY(v){ v=Math.round(v); return v>=1e6?Math.round(v/1e6)+'M':v>=1000?Math.round(v/1000)+'K':String(v); }
+  function fmtTip(key, val){
+    if(mode==='daily'){
+      const [y,m,d]=key.split('-').map(Number);
+      const label=new Date(y,m-1,d).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+      return `${label} — ${fmt(val)} messages`;
+    }
+    return `Week of ${formatAxisDate(key, multiYear)} — avg ${fmt(Math.round(val*10)/10)}/day`;
+  }
 
   function drawBase(){
     ctx.clearRect(0,0,w,h);
 
-    // Grid lines + y-axis value labels
     ctx.strokeStyle = '#26313C'; ctx.lineWidth = 1;
     ctx.fillStyle = '#8492A0'; ctx.font = '9px IBM Plex Mono, monospace';
     ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
@@ -1097,22 +1114,27 @@ function drawActivityChart(dayEntries){
       const y = padTop + plotH*i/3;
       ctx.beginPath(); ctx.moveTo(padLeft,y); ctx.lineTo(w-padRight,y); ctx.stroke();
       const val = maxV*(1-i/3);
-      if(val > 0) ctx.fillText(fmtY(val), padLeft-4, y);
+      if(val > 0) ctx.fillText(fmtY(val), padLeft-8, y);
     }
 
-    // Area fill
     ctx.beginPath();
     dayEntries.forEach((e,i)=>{ const x=ptX(i),y=ptY(e[1]); if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); });
-    ctx.lineTo(ptX(n-1),padTop+plotH); ctx.lineTo(padLeft,padTop+plotH);
+    if(n>1){ ctx.lineTo(ptX(n-1),padTop+plotH); ctx.lineTo(padLeft,padTop+plotH); }
     ctx.closePath(); ctx.fillStyle = grad; ctx.fill();
 
-    // Line
-    ctx.beginPath();
-    dayEntries.forEach((e,i)=>{ const x=ptX(i),y=ptY(e[1]); if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); });
-    ctx.strokeStyle = '#5EEAD4'; ctx.lineWidth = 1.6;
-    ctx.shadowColor = 'rgba(94,234,212,0.6)'; ctx.shadowBlur = 4; ctx.stroke(); ctx.shadowBlur = 0;
+    if(n>1){
+      ctx.beginPath();
+      dayEntries.forEach((e,i)=>{ const x=ptX(i),y=ptY(e[1]); if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); });
+      ctx.strokeStyle = '#5EEAD4'; ctx.lineWidth = 1.6;
+      ctx.shadowColor = 'rgba(94,234,212,0.6)'; ctx.shadowBlur = 4; ctx.stroke(); ctx.shadowBlur = 0;
+    }
+    if(n===1){
+      const dx=ptX(0),dy=ptY(dayEntries[0][1]);
+      ctx.beginPath();ctx.arc(dx,dy,4.5,0,Math.PI*2);
+      ctx.fillStyle='#5EEAD4';ctx.shadowColor='rgba(94,234,212,0.7)';ctx.shadowBlur=8;ctx.fill();ctx.shadowBlur=0;
+      ctx.beginPath();ctx.arc(dx,dy,2.5,0,Math.PI*2);ctx.fillStyle='#0D1117';ctx.fill();
+    }
 
-    // Axis tick marks and labels
     ctx.strokeStyle = '#26313C'; ctx.fillStyle = '#8492A0';
     ctx.font = '10px IBM Plex Mono, monospace'; ctx.textBaseline = 'top';
     tickIdx.forEach(i=>{
@@ -1123,19 +1145,15 @@ function drawActivityChart(dayEntries){
       ctx.fillText(label, x, padTop+plotH+7);
     });
 
-    // X-axis title
-    ctx.fillStyle = '#8492A0';
-    ctx.font = '9px IBM Plex Mono, monospace';
+    ctx.fillStyle = '#8492A0'; ctx.font = '9px IBM Plex Mono, monospace';
     ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-    ctx.fillText('Date', padLeft + plotW/2, h - 3);
+    ctx.fillText(mode==='weekly'?'Week':'Date', padLeft + plotW/2, h - 3);
 
-    // Y-axis title (rotated)
     ctx.save();
-    ctx.translate(10, padTop + plotH/2);
-    ctx.rotate(-Math.PI/2);
+    ctx.translate(9, padTop + plotH/2); ctx.rotate(-Math.PI/2);
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.font = '9px IBM Plex Mono, monospace'; ctx.fillStyle = '#8492A0';
-    ctx.fillText('Messages per day', 0, 0);
+    ctx.fillText(yTitle, 0, 0);
     ctx.restore();
   }
 
@@ -1155,8 +1173,8 @@ function drawActivityChart(dayEntries){
     const x = e.clientX - rect.left;
     let idx = stepX>0 ? Math.round((x-padLeft)/stepX) : 0;
     idx = Math.max(0, Math.min(n-1, idx));
-    const [key, count] = dayEntries[idx];
-    showTip(e, `Week of ${formatAxisDate(key, multiYear)} — avg ${fmt(count)}/day`);
+    const [key, val] = dayEntries[idx];
+    showTip(e, fmtTip(key, val));
     if(idx !== lastDotIdx){
       lastDotIdx = idx;
       drawBase();
@@ -1204,8 +1222,17 @@ function render(){
   `;
 
   const patternsHtml = `
-    ${sectionHtml('activity', 'Message Trend', 'weekly average, messages per day',
-      `<div class="panel"><div class="chart-wrap"><canvas id="activity-canvas" style="width:100%;height:200px;"></canvas></div></div>`)}
+    ${sectionHtml('activity', 'Message Trend', state.mainTrendMode==='daily'?'daily totals':'weekly average · messages per day',
+      `<div class="panel">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;">
+          <div class="chart-range-badge">${state.rangeKey==='all'?'All Time':state.rangeKey}</div>
+          <div class="tabs" style="margin:6px 14px 0;padding:0;">
+            <button class="tab-btn${(state.mainTrendMode||'weekly')==='weekly'?' active':''}" onclick="state.mainTrendMode='weekly';render()">Weekly avg</button>
+            <button class="tab-btn${state.mainTrendMode==='daily'?' active':''}" onclick="state.mainTrendMode='daily';render()">Daily</button>
+          </div>
+        </div>
+        <div class="chart-wrap"><canvas id="activity-canvas" style="width:100%;height:200px;"></canvas></div>
+      </div>`)}
     ${sectionHtml('signal', 'Signal Pattern', 'messages by hour &amp; weekday, in range',
       `<div class="panel">${heatGridHtml(agg.heat)}</div>`)}
     ${emojiStatsHtml()}
@@ -1256,7 +1283,11 @@ function render(){
   `;
 
   if(state.mainTab === 'patterns'){
-    drawActivityChart(toWeeklyAverage(agg.dayEntries, range.start, range.end));
+    if(state.mainTrendMode === 'daily'){
+      drawActivityChart(agg.dayEntries, 'daily');
+    } else {
+      drawActivityChart(toWeeklyAverage(agg.dayEntries, range.start, range.end), 'weekly');
+    }
   }
   if(state.mainTab === 'all-time'){
     drawYearlyChart(computeYearlyStats());

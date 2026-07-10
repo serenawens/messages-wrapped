@@ -36,6 +36,18 @@ LOOKUP_OUTPUT_FILE = os.path.join(SCRIPT_DIR, "iMessage_Dashboard_Lookup.html")
 
 APPLE_EPOCH_OFFSET = 978307200  # seconds between 1970-01-01 and 2001-01-01
 
+def _detect_image_mime(data: bytes):
+    """Return MIME type for browser-safe image formats, or None to skip."""
+    if data[:3] == b'\xff\xd8\xff':
+        return 'image/jpeg'
+    if data[:8] == b'\x89PNG\r\n\x1a\n':
+        return 'image/png'
+    if data[:6] in (b'GIF87a', b'GIF89a'):
+        return 'image/gif'
+    # HEIC/HEIF has an 'ftyp' box starting at byte 4 — not widely supported
+    return None
+
+
 STOPWORDS = set("""
 the a an and or but if then so to of in on for with at by from as is it its
 this that these those i you he she we they me him her us them my your his
@@ -313,9 +325,12 @@ def load_mac_contacts():
                 if photo_col:
                     import base64
                     for r in cur.execute(f"SELECT Z_PK, {photo_col} FROM ZABCDRECORD WHERE {photo_col} IS NOT NULL"):
-                        pk, data = r[0], r[1]
-                        if data and isinstance(data, (bytes, bytearray)) and len(data) < 500_000:
-                            photos_by_pk[pk] = base64.b64encode(data).decode()
+                        pk, raw = r[0], r[1]
+                        if raw and isinstance(raw, (bytes, bytearray)) and 100 < len(raw) < 500_000:
+                            bdata = bytes(raw)
+                            mime = _detect_image_mime(bdata)
+                            if mime:
+                                photos_by_pk[pk] = {"mime_type": mime, "data": base64.b64encode(bdata).decode("ascii")}
             except Exception:
                 pass  # photos are optional
 
@@ -561,12 +576,16 @@ def main():
     person_chars_received: dict = defaultdict(list)
     person_monthly_sent: dict = defaultdict(Counter)    # pid -> "YYYY-MM" -> count
     person_monthly_received: dict = defaultdict(Counter)
+    person_daily_sent: dict = defaultdict(Counter)      # pid -> "YYYY-MM-DD" -> count
+    person_daily_received: dict = defaultdict(Counter)
 
     # Per-chat detailed tracking (for group chat lookup page)
     chat_emoji: dict = defaultdict(Counter)
     chat_hour_counts: dict = defaultdict(lambda: [0] * 24)
     chat_monthly: dict = defaultdict(Counter)           # chat_id -> "YYYY-MM" -> count
     chat_sender_monthly: dict = defaultdict(lambda: defaultdict(Counter))  # chat_id -> pid -> month -> n
+    chat_daily: dict = defaultdict(Counter)             # chat_id -> "YYYY-MM-DD" -> count
+    chat_sender_daily: dict = defaultdict(lambda: defaultdict(Counter))    # chat_id -> pid -> day -> n
 
     # Map person_id -> their 1:1 chat_id (filled below during message loop)
     person_to_1on1: dict = {}
@@ -603,14 +622,19 @@ def main():
             person_hour_counts[sender][hour] += 1
 
         # Per-chat tracking for group chat lookup
-        month_key = datetime.fromtimestamp(ts / 1000).strftime("%Y-%m")
+        msg_dt = datetime.fromtimestamp(ts / 1000)
+        month_key = msg_dt.strftime("%Y-%m")
+        day_key_str = msg_dt.strftime("%Y-%m-%d")
         chat_monthly[chat_id][month_key] += 1
-        hour = datetime.fromtimestamp(ts / 1000).hour
+        chat_daily[chat_id][day_key_str] += 1
+        hour = msg_dt.hour
         chat_hour_counts[chat_id][hour] += 1
         if is_from_me:
             chat_sender_monthly[chat_id]["me"][month_key] += 1
+            chat_sender_daily[chat_id]["me"][day_key_str] += 1
         elif sender:
             chat_sender_monthly[chat_id][sender][month_key] += 1
+            chat_sender_daily[chat_id][sender][day_key_str] += 1
 
         # Per-person 1:1 tracking (for response times, word freq, emojis, lengths)
         is_group_chat = chats[chat_id]["group"]
@@ -696,6 +720,7 @@ def main():
                 if not is_game_pigeon:
                     person_chars_sent[other_in_1on1].append(len(clean_text))
                 person_monthly_sent[other_in_1on1][month_key] += 1
+                person_daily_sent[other_in_1on1][day_key_str] += 1
         else:
             uni_received.update(uni)
             bi_received.update(bi)
@@ -712,6 +737,7 @@ def main():
                 if not is_game_pigeon:
                     person_chars_received[other_in_1on1].append(len(clean_text))
                 person_monthly_received[other_in_1on1][month_key] += 1
+                person_daily_received[other_in_1on1][day_key_str] += 1
         chat_uni[chat_id].update(uni)
         chat_bi[chat_id].update(bi)
 
@@ -869,6 +895,8 @@ def main():
             "avg_chars_received": _avg(person_chars_received.get(pid, [])),
             "monthly_sent": dict(person_monthly_sent.get(pid, {})),
             "monthly_received": dict(person_monthly_received.get(pid, {})),
+            "daily_sent": dict(person_daily_sent.get(pid, {})),
+            "daily_received": dict(person_daily_received.get(pid, {})),
         }
 
     # ── Group chat profiles (for the Lookup page) ──
@@ -897,6 +925,11 @@ def main():
             "activity_by_sender_month": {
                 pid: dict(monthly)
                 for pid, monthly in chat_sender_monthly.get(cid, {}).items()
+            },
+            "activity_by_day": dict(chat_daily.get(cid, {})),
+            "activity_by_sender_day": {
+                pid: dict(daily)
+                for pid, daily in chat_sender_daily.get(cid, {}).items()
             },
         }
     print(f"  Built profiles for {len(chat_profiles)} group chats.")
