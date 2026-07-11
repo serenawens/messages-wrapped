@@ -6,9 +6,10 @@
   <title>iMessages Wrapped</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; line-height: 1.6; max-width: 900px; margin: 40px auto; padding: 0 20px 60px; color: #1f2937; background: #ffffff; }
-    h1, h2 { line-height: 1.25; color: #111827; }
+    h1, h2, h3 { line-height: 1.25; color: #111827; }
     h1 { font-size: 2.4rem; margin-bottom: 0.5rem; }
     h2 { margin-top: 2rem; border-bottom: 1px solid #e5e7eb; padding-bottom: 0.25rem; }
+    h3 { margin-top: 1.25rem; font-size: 1.05rem; }
     a { color: #2563eb; }
     code { background: #f3f4f6; padding: 0.12rem 0.3rem; border-radius: 4px; font-size: 0.95em; }
     pre { background: #111827; color: #f9fafb; padding: 1rem; overflow-x: auto; border-radius: 8px; }
@@ -30,14 +31,14 @@ no uploads, no external libraries.</p>
 <h2 id="tldr">TL;DR</h2>
 
 <ol>
-  <li><strong>Download the project zip</strong> and unzip it.</li>
-  <li><strong>Grant Full Disk Access</strong> to your terminal app (one-time), then restart it.</li>
-  <li><strong>Run</strong> <code>python3 build_dashboard.py</code> from the unzipped folder.</li>
+  <li><strong>Clone this repo</strong> to your Mac (one-time).</li>
+  <li><strong>Grant Full Disk Access</strong> to Terminal (one-time), then restart it.</li>
+  <li><strong>Run</strong> <code>python3 build_dashboard.py</code> in the project folder.</li>
   <li><strong>Open</strong> <code>iMessage_Dashboard.html</code> in your browser.</li>
 </ol>
 
-<p>The three files the script actually needs are <code>build_dashboard.py</code>,
-<code>dashboard_template.html</code>, and <code>lookup_template.html</code> — all included in the zip.</p>
+<p>When there's an update, pull the latest code and run the script again — see
+<a href="#getting-updates">getting updates</a>.</p>
 
 <p>Need more detail? See the <a href="#detailed-setup">full setup guide</a>.</p>
 
@@ -82,43 +83,59 @@ can be collapsed by clicking their headers.</p>
 
 <h2 id="detailed-setup">Detailed setup</h2>
 
-<p><strong>1. Download and unzip the project.</strong></p>
-<p>Grab the zip from the repo's releases or download page, then unzip it anywhere
-on your Mac (e.g. <code>~/Documents/iMessages-Wrapped</code>). The zip includes the README,
-a sample dashboard, and the three files the script depends on:</p>
+<h3>1. Clone the repo (one-time)</h3>
+<p><strong>Terminal</strong> is a built-in Mac app where you type commands. Open it with
+<strong>Spotlight</strong> (press <code>Cmd + Space</code>, type <code>Terminal</code>, press Enter).</p>
+<p>Copy and paste this command, then press Enter. It downloads the project into a
+folder called <code>messages-wrapped</code> inside your Documents:</p>
+<pre><code>cd ~/Documents &amp;&amp; git clone https://github.com/serenawens/messages-wrapped.git</code></pre>
+<p>If macOS asks to install developer tools, click <strong>Install</strong> — that's normal the
+first time you use <code>git</code>.</p>
+<p>The script needs three files that all live in that folder:</p>
 <ul>
   <li><code>build_dashboard.py</code> — reads your Messages data and generates the dashboards</li>
   <li><code>dashboard_template.html</code> — main dashboard layout and logic</li>
   <li><code>lookup_template.html</code> — lookup page layout and logic</li>
 </ul>
-<p>All three must stay in the same folder. Don't move or rename them separately.</p>
+<p>Don't move or rename those separately.</p>
 
-<p><strong>2. Grant Full Disk Access (one-time).</strong></p>
-<p><code>chat.db</code> is a protected file on macOS, so your terminal needs permission:</p>
+<h3>2. Grant Full Disk Access (one-time)</h3>
+<p>Your Messages database is a protected file, so Terminal needs permission to read
+it:</p>
 <ol>
   <li>Open <strong>System Settings → Privacy &amp; Security → Full Disk Access</strong></li>
-  <li>Click <strong>+</strong> and add your terminal app (Terminal, iTerm2, etc.)</li>
+  <li>Click <strong>+</strong> and add <strong>Terminal</strong></li>
   <li>Toggle it on</li>
-  <li><strong>Quit and reopen</strong> the terminal app — the permission doesn't apply until you restart it</li>
+  <li><strong>Quit and reopen Terminal</strong> — the permission doesn't apply until you restart it</li>
 </ol>
 
-<p><strong>3. Run the script.</strong></p>
-<p>Open Terminal, <code>cd</code> into the unzipped folder, then:</p>
+<h3>3. Run the script</h3>
+<p>In Terminal, go into the project folder:</p>
+<pre><code>cd ~/Documents/messages-wrapped</code></pre>
+<p>Then run the build script:</p>
 <pre><code>python3 build_dashboard.py</code></pre>
 <p>This reads <code>~/Library/Messages/chat.db</code> automatically via a temporary copy, so
-your real database is never locked. If it can't find your database, point it at
-the file directly:</p>
-<pre><code>python3 build_dashboard.py /path/to/chat.db</code></pre>
+your real database is never locked. The first run may take a minute depending on
+how many messages you have.</p>
 
-<p><strong>4. Open the output in your browser.</strong></p>
+<h3>4. Open the output in your browser</h3>
 <p>The script creates two files in the same folder:</p>
 <ul>
   <li><code>iMessage_Dashboard.html</code> — main dashboard</li>
   <li><code>iMessage_Dashboard_Lookup.html</code> — search any person or group chat</li>
 </ul>
-<p>Double-click either file, or right-click → <strong>Open With</strong> → Safari/Chrome. No
-internet connection required.</p>
+<p>Double-click either file in Finder, or right-click → <strong>Open With</strong> →
+Safari/Chrome. No internet connection is needed after the dashboard is built.</p>
 <p>To preview the UI without your data, open <code>iMessage_Dashboard_SAMPLE.html</code>.</p>
+
+<h2 id="getting-updates">Getting updates</h2>
+<p>When the project is updated, you don't need to re-download anything. Just pull
+the latest code and rebuild your dashboard:</p>
+<pre><code>cd ~/Documents/messages-wrapped
+git pull
+python3 build_dashboard.py</code></pre>
+<p>Then reopen <code>iMessage_Dashboard.html</code> in your browser. Your <code>contacts.json</code>
+file (if you made one) stays in place — you only need to rerun the script.</p>
 
 <h2 id="extra-naming-contacts">Extra: naming contacts (optional)</h2>
 
