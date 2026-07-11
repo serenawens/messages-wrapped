@@ -93,9 +93,9 @@ h1{font-family:var(--font-display);font-weight:600;font-size:30px;margin:0;lette
 .reply-value{font-family:var(--font-mono);font-size:20px;font-weight:600;}
 .reply-value.teal{color:var(--teal);}
 .reply-value.amber{color:var(--amber);}
-.reply-distro{margin-top:14px;}
-.reply-distro-bar{display:flex;height:24px;border-radius:6px;overflow:hidden;background:var(--panel);border:1px solid var(--border);}
-.reply-distro-seg{height:100%;min-width:3px;}
+.reply-distro-bar{display:flex;height:24px;border-radius:6px;overflow:visible;background:var(--panel);border:1px solid var(--border);align-items:stretch;}
+.reply-distro-seg{height:100%;min-width:3px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform .15s ease;border-radius:2px;transform-origin:center;position:relative;z-index:0;}
+.reply-distro-seg:hover{transform:scale(1.12);z-index:1;}
 .reply-distro-legend{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;margin-top:12px;}
 .reply-distro-item{display:flex;align-items:center;gap:7px;font-family:var(--font-mono);font-size:10.5px;color:var(--text);}
 .reply-distro-swatch{width:10px;height:10px;border-radius:2px;flex-shrink:0;}
@@ -103,10 +103,14 @@ h1{font-family:var(--font-display);font-weight:600;font-size:30px;margin:0;lette
 .reply-distro-pct{color:var(--muted);}
 .reply-summary{margin-top:14px;}
 .reply-summary-label{font-family:var(--font-mono);font-size:12px;font-weight:600;color:var(--text);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;}
-.reply-summary-bar{display:flex;height:28px;border-radius:6px;overflow:hidden;border:1px solid var(--border);}
-.reply-summary-seg{height:100%;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:10px;font-weight:600;color:var(--ink);min-width:28px;}
+.reply-summary-bar{display:flex;height:28px;border-radius:6px;overflow:visible;border:1px solid var(--border);align-items:stretch;}
+.reply-summary-seg{height:100%;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:10px;font-weight:600;color:var(--ink);min-width:28px;cursor:pointer;transition:transform .15s ease;border-radius:3px;transform-origin:center;position:relative;z-index:0;}
+.reply-summary-seg:hover{transform:scale(1.12);z-index:1;}
+.reply-seg-label{font-family:var(--font-mono);font-size:9px;font-weight:600;color:var(--ink);opacity:0;transition:opacity .15s ease;pointer-events:none;}
+.reply-distro-seg:hover .reply-seg-label,.reply-summary-seg:hover .reply-seg-label{opacity:1;}
 .reply-detail-section{margin-top:16px;}
-.reply-detail-title{font-family:var(--font-mono);font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em;}
+.reply-detail-title{font-family:var(--font-mono);font-size:12px;font-weight:600;color:var(--text);margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em;}
+.reply-detail-blurb{font-size:12px;line-height:1.4;color:var(--muted);margin-bottom:8px;}
 
 /* Rank rows */
 .rank-row{display:grid;grid-template-columns:28px 1fr 200px 64px;align-items:center;gap:12px;padding:10px 12px;border-bottom:1px solid var(--border);}
@@ -119,8 +123,11 @@ h1{font-family:var(--font-display);font-weight:600;font-size:30px;margin:0;lette
 .rank-count{font-family:var(--font-mono);font-size:13px;color:var(--text);text-align:right;}
 
 /* Hour strip */
-.hour-strip{display:grid;grid-template-columns:repeat(24,1fr);gap:2px;padding:14px;}
-.hour-cell{aspect-ratio:1;border-radius:2px;background:var(--panel-2);}
+.hour-strip{display:grid;grid-template-columns:repeat(24,1fr);gap:2px;padding:14px;align-items:flex-end;}
+.hour-cell{aspect-ratio:1;border-radius:2px;background:var(--panel-2);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform .15s ease;transform-origin:center;position:relative;z-index:0;}
+.hour-cell:hover{transform:scale(1.18);z-index:1;}
+.hour-cell-val{font-family:var(--font-mono);font-size:8px;font-weight:600;color:var(--text);opacity:0;transition:opacity .15s ease;pointer-events:none;line-height:1;}
+.hour-cell:hover .hour-cell-val{opacity:1;}
 
 /* Word/emoji chips */
 .word-cloud{display:flex;flex-wrap:wrap;gap:8px 10px;padding:14px;}
@@ -179,6 +186,7 @@ h1{font-family:var(--font-display);font-weight:600;font-size:30px;margin:0;lette
 /* Split rank bar (for sent/received + shared group chat both-count bars) */
 .rank-bar-fill-wrap{display:flex;height:100%;}
 .top10-row{padding:8px 4px;gap:10px;}
+.top10-index{font-family:var(--font-mono);font-size:12px;color:var(--muted);width:28px;flex-shrink:0;text-align:center;}
 .top10-name-wrap{flex:0 1 220px;min-width:120px;overflow:hidden;}
 .top10-bar-wrap{flex:1 1 auto;min-width:80px;padding:0 8px;}
 .top10-count{flex:0 0 56px;text-align:right;font-family:var(--font-mono);font-size:12px;color:var(--text);}
@@ -215,21 +223,50 @@ function formatDuration(ms){
   return Math.round(h/24)+'d';
 }
 function formatHour(h){ const p=h<12?'AM':'PM',d=h%12||12; return `${d} ${p}`; }
+function hourCellHtml(v, h, max, rgba){
+  const a=(0.06+(v/max)*0.85).toFixed(3);
+  const bg=rgba||`rgba(94,234,212,${a})`;
+  return `<div class="hour-cell" style="background:${bg}" aria-label="${formatHour(h)} — ${fmt(v)} messages"><span class="hour-cell-val">${fmt(v)}</span></div>`;
+}
+function profileBarRowHtml({idx, leadHtml, name, sub, barInner, count, onclick}){
+  const clickAttr=onclick?` onclick="${onclick}"`:'';
+  const rowStyle=onclick?'':' style="cursor:default;"';
+  return `<div class="lookup-result-row top10-row"${clickAttr}${rowStyle}>
+    ${leadHtml||`<div class="top10-index">${String(idx).padStart(2,'0')}</div>`}
+    <div class="top10-name-wrap">
+      <div class="lookup-result-name">${name}</div>
+      ${sub?`<div class="lookup-result-sub">${sub}</div>`:''}
+    </div>
+    <div class="top10-bar-wrap"><div class="rank-bar-track">${barInner}</div></div>
+    <div class="top10-count">${fmt(count)}</div>
+  </div>`;
+}
 
 const REPLY_UNDER_KEYS=['<1m','1–5m','5–15m'];
 const REPLY_OVER_KEYS=['15–30m','30m–1h','1–6h','6–24h','Over 1 day'];
 const REPLY_LONG_KEYS=['1–3 days','3 days – 1 week','1–2 weeks','Over 2 weeks'];
 const REPLY_COLORS_TEAL=['#5EEAD4','#3DD4BE','#2BBDA8','#22A894','#1A9280','#147A6A','#0E6456'];
 const REPLY_COLORS_AMBER=['#F2A65A','#E89448','#DE8236','#D47028','#CA5E1C','#C04C12','#B63A08'];
-function replyDetailSection(title, buckets, keys, colors, offset){
+function replyBarSeg(pct, color, cls, aria){
+  const label=cls==='reply-summary-seg'
+    ? `${pct}%`
+    : `<span class="reply-seg-label">${pct}%</span>`;
+  return `<div class="${cls}" style="width:${pct}%;background:${color};" aria-label="${esc(aria||'')}">${label}</div>`;
+}
+function replyDetailSection(title, blurb, buckets, keys, colors, offset, context){
   const entries=keys.map((k,i)=>[k,buckets[k]||0,i]).filter(([,v])=>v>0);
   if(!entries.length) return '';
-  const bar=entries.map(([k,v,i])=>`<div class="reply-distro-seg" style="width:${v}%;background:${colors[offset+i]}" title="${k}: ${v}%"></div>`).join('');
+  const bar=entries.map(([k,v,i])=>replyBarSeg(v, colors[offset+i], 'reply-distro-seg', `${k} — ${v}% ${context}`)).join('');
   const legend=keys.map((k,i)=>{
     const v=buckets[k]||0; if(!v) return '';
     return `<div class="reply-distro-item"><div class="reply-distro-swatch" style="background:${colors[offset+i]}"></div><span class="reply-distro-label">${k}</span><span class="reply-distro-pct">${v}%</span></div>`;
   }).join('');
-  return `<div class="reply-detail-section"><div class="reply-detail-title">${title}</div><div class="reply-distro-bar">${bar}</div><div class="reply-distro-legend">${legend}</div></div>`;
+  return `<div class="reply-detail-section">
+    <div class="reply-detail-title">${title}</div>
+    ${blurb?`<div class="reply-detail-blurb">${blurb}</div>`:''}
+    <div class="reply-distro-bar">${bar}</div>
+    <div class="reply-distro-legend">${legend}</div>
+  </div>`;
 }
 function replyDistributionHtml(pcts, palette){
   if(!pcts||!Object.keys(pcts).length) return '<div class="empty" style="padding:10px">Not enough reply data.</div>';
@@ -240,8 +277,8 @@ function replyDistributionHtml(pcts, palette){
     const summary=`<div class="reply-summary">
       <div class="reply-summary-label">Quick vs slow replies</div>
       <div class="reply-summary-bar">
-        ${under?`<div class="reply-summary-seg" style="width:${under}%;background:${quickColor}">${under}%</div>`:''}
-        ${over?`<div class="reply-summary-seg" style="width:${over}%;background:${slowColor}">${over}%</div>`:''}
+        ${under?replyBarSeg(under, quickColor, 'reply-summary-seg', `Under 15 min — ${under}% of all replies`):''}
+        ${over?replyBarSeg(over, slowColor, 'reply-summary-seg', `Over 15 min — ${over}% of all replies`):''}
       </div>
       <div class="reply-distro-legend" style="margin-top:8px;">
         <div class="reply-distro-item"><div class="reply-distro-swatch" style="background:${quickColor}"></div><span class="reply-distro-label">Under 15 min</span><span class="reply-distro-pct">${under}%</span></div>
@@ -249,10 +286,10 @@ function replyDistributionHtml(pcts, palette){
       </div>
     </div>`;
     let html=summary
-      +replyDetailSection('Under 15 min · % of quick replies', pcts.under||{}, REPLY_UNDER_KEYS, colors, 0)
-      +replyDetailSection('Over 15 min · % of slow replies', pcts.over||{}, REPLY_OVER_KEYS, colors, 2);
+      +replyDetailSection('Under 15 min','Of those quick replies, how fast were they?', pcts.under||{}, REPLY_UNDER_KEYS, colors, 0, 'of quick replies')
+      +replyDetailSection('Over 15 min','Of the slower replies, how long did they take?', pcts.over||{}, REPLY_OVER_KEYS, colors, 2, 'of slow replies');
     if(pcts.over_long){
-      html+=replyDetailSection('Over 1 day · % of multi-day replies', pcts.over_long, REPLY_LONG_KEYS, colors, 4);
+      html+=replyDetailSection('Over 1 day','Of replies that took more than a day, how long?', pcts.over_long, REPLY_LONG_KEYS, colors, 4, 'of multi-day replies');
     }
     return html;
   }
@@ -781,6 +818,9 @@ function setLookupRange(key){
     state.rangeKey=key;
     state.personTrendMonth='all';
     state.groupTrendMonth='all';
+    // Clear count caches so Top 10 and person profiles stay in sync
+    for(const k of Object.keys(_top10Cache)) delete _top10Cache[k];
+    for(const k of Object.keys(_person1on1Cache)) delete _person1on1Cache[k];
   }
   render();
 }
@@ -795,8 +835,26 @@ function selectGroup(gid, name){
   render();
 }
 
-// Cached TOP-10 scan using DATA.messages as the canonical source
+// Cached TOP-10 scan using DATA.messages as the canonical source (1:1 only for people)
 const _top10Cache={};
+const _person1on1Cache={};
+function person1on1Counts(pid, rangeKey){
+  const cacheKey=pid+'|'+rangeKey;
+  if(_person1on1Cache[cacheKey]) return _person1on1Cache[cacheKey];
+  const range=rangeFor(rangeKey,DATA.meta.date_min,DATA.meta.date_max);
+  let sent=0, recv=0;
+  for(const m of DATA.messages){
+    const [ts,chatId,,isFromMe]=m;
+    if(ts<range.start||ts>range.end) continue;
+    const chat=DATA.chats[chatId];
+    if(!chat||chat.group||chat.participants.length!==1) continue;
+    if(chat.participants[0]!==pid) continue;
+    if(isFromMe) sent++; else recv++;
+  }
+  const out={sent,recv,total:sent+recv};
+  _person1on1Cache[cacheKey]=out;
+  return out;
+}
 function computeTop10(rangeKey){
   if(_top10Cache[rangeKey]) return _top10Cache[rangeKey];
   const range=rangeFor(rangeKey,DATA.meta.date_min,DATA.meta.date_max);
@@ -806,6 +864,7 @@ function computeTop10(rangeKey){
     if(ts<range.start||ts>range.end) continue;
     const chat=DATA.chats[chatId];
     if(!chat) continue;
+    // People: 1:1 chats only (messages to/from them, no group chats)
     if(!chat.group&&chat.participants.length===1){
       const other=chat.participants[0];
       if(isFromMe){
@@ -830,6 +889,10 @@ function computeTop10(rangeKey){
     })
     .sort((a,b)=>b.total-a.total).slice(0,10);
   _top10Cache[rangeKey]={topPersons,topGroups};
+  // Seed per-person cache from the same scan so Top 10 and profile match
+  for(const p of topPersons){
+    _person1on1Cache[p.pid+'|'+rangeKey]={sent:p.sent,recv:p.recv,total:p.total};
+  }
   return _top10Cache[rangeKey];
 }
 
@@ -847,11 +910,12 @@ function personProfileHtml(pid){
   const p=DATA.person_profiles[pid]||{};
   const name=DATA.handles[pid]||pid;
   const addrs=(DATA.handle_contacts[pid]||[]).filter(a=>a!==name).join(', ');
-  const range=rangeFor(state.rangeKey, DATA.meta.date_min, DATA.meta.date_max);
 
-  const sentInRange=filterPersonMessages(p.monthly_sent, range.start, range.end);
-  const recvInRange=filterPersonMessages(p.monthly_received, range.start, range.end);
-  const totalInRange=sentInRange+recvInRange;
+  // Same 1:1-only message scan as Top 10 (no group chats)
+  const counts=person1on1Counts(pid, state.rangeKey);
+  const sentInRange=counts.sent;
+  const recvInRange=counts.recv;
+  const totalInRange=counts.total;
   const hourCounts=p.hour_counts||Array(24).fill(0);
   const hasTextingHours=hourCounts.some(c=>c>0);
   const bucket=hasTextingHours?textingBucket(hourCounts):'—';
@@ -865,11 +929,7 @@ function personProfileHtml(pid){
 
   // Hour strip (only rendered when there are received 1:1 messages)
   const hMax=Math.max(...hourCounts,1);
-  const hourStrip=hourCounts.map((v,h)=>{
-    const a=(0.06+(v/hMax)*0.85).toFixed(3);
-    const tip=`${formatHour(h)} — ${fmt(v)} messages`;
-    return `<div class="hour-cell" style="background:rgba(94,234,212,${a})" data-tip="${esc(tip)}" onmouseenter="showTip(event,this.dataset.tip)" onmousemove="moveTip(event)" onmouseleave="hideTip()"></div>`;
-  }).join('');
+  const hourStrip=hourCounts.map((v,h)=>hourCellHtml(v,h,hMax)).join('');
   const hourLabels=['12 AM','','','3 AM','','','6 AM','','','9 AM','','','12 PM','','','3 PM','','','6 PM','','','9 PM','',''].map(l=>`<div style="text-align:center;font-family:var(--font-mono);font-size:7px;color:var(--muted)">${l}</div>`).join('');
   const hoursHtml=hasTextingHours
     ? `<div class="panel"><div class="hour-strip">${hourStrip}</div><div style="display:grid;grid-template-columns:repeat(24,1fr);padding:0 14px 8px">${hourLabels}</div></div>`
@@ -881,7 +941,7 @@ function personProfileHtml(pid){
   const wordSrc=state.personWordTab==='words'?words:phrases;
   const wordCloud=wordSrc.length
     ? `<div class="word-cloud">`+wordSrc.slice(0,20).map(([w,c])=>`<div class="word-chip"><b>${esc(w)}</b><span class="n">${fmt(c)}</span></div>`).join('')+`</div>`
-    : '<div class="empty">Not enough messages for word analysis.</div>';
+    : `<div class="empty">${state.personWordTab==='phrases'?'No eligible phrases found in this conversation.':'No eligible words found in this conversation.'}</div>`;
 
   // Emojis
   const emojiSrc=state.personEmojiAud==='sent'?p.emojis_sent||[]:state.personEmojiAud==='received'?p.emojis_received||[]:
@@ -915,20 +975,17 @@ function personProfileHtml(pid){
           const {theirR:their,yourR:your,combined}=g;
           const barPct=Math.max(4,combined/mx*100);
           const theirPct=combined?their/combined*100:50;
-          return `<div style="padding:9px 12px;border-bottom:1px solid var(--border);display:grid;grid-template-columns:28px 1fr 110px 70px;align-items:center;gap:10px;">
-            <div class="rank-idx">${String(i+1).padStart(2,'0')}</div>
-            <div style="min-width:0;overflow:hidden;">
-              <div style="font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(g.name)}</div>
-              ${g.their_monthly!=null||g.your_count!=null?`<div style="font-family:var(--font-mono);font-size:10px;margin-top:2px;"><span style="color:var(--amber)">Them ${fmt(their)}</span><span style="color:var(--muted)"> · </span><span style="color:var(--teal)">You ${fmt(your)}</span></div>`:'' }
-            </div>
-            <div class="rank-bar-track">
-              <div class="rank-bar-fill-wrap" style="width:${barPct}%">
-                <div style="width:${theirPct}%;background:var(--amber);height:100%;"></div>
-                <div style="flex:1;background:var(--teal);height:100%;"></div>
-              </div>
-            </div>
-            <div style="font-family:var(--font-mono);font-size:12px;text-align:right;color:var(--text);">${fmt(combined)}</div>
-          </div>`;
+          const sub=(g.their_monthly!=null||g.your_count!=null)
+            ? `<span style="color:var(--amber)">Them ${fmt(their)}</span><span style="color:var(--muted)"> · </span><span style="color:var(--teal)">You ${fmt(your)}</span>`
+            : '';
+          return profileBarRowHtml({
+            idx:i+1,
+            leadHtml:`<div class="lookup-result-avatar" style="font-size:16px;flex-shrink:0;">💬</div>`,
+            name:esc(g.name),
+            sub,
+            barInner:`<div class="rank-bar-fill-wrap" style="width:${barPct}%"><div style="width:${theirPct}%;background:var(--amber);height:100%;"></div><div style="flex:1;background:var(--teal);height:100%;"></div></div>`,
+            count:combined,
+          });
         }).join('')+`<div style="padding:6px 12px;font-family:var(--font-mono);font-size:10px;color:var(--muted);"><span style="color:var(--amber)">■</span> Them &nbsp;<span style="color:var(--teal)">■</span> You${state.rangeKey!=='all'?' · '+state.rangeKey:' · all-time'}</div>`;
       })()
     : '<div class="empty">Not in any group chats together.</div>';
@@ -1037,31 +1094,27 @@ function groupProfileHtml(gid){
     const name=pid==='me'?'You':(DATA.handles[pid]||pid);
     const barColor=pid==='me'?'var(--teal)':'var(--amber)';
     const pct=Math.max(4,cnt/mxSender*100);
-    return `<div class="rank-row">
-      <div class="rank-idx">${String(i+1).padStart(2,'0')}</div>
-      <div class="rank-name">${esc(name)}</div>
-      <div class="rank-bar-track"><div class="rank-bar-fill" style="width:${pct}%;background:${barColor}"></div></div>
-      <div class="rank-count">${fmt(cnt)}</div>
-    </div>`;
+    return profileBarRowHtml({
+      idx:i+1,
+      name:esc(name),
+      barInner:`<div class="rank-bar-fill" style="width:${pct}%;background:${barColor}"></div>`,
+      count:cnt,
+    });
   }).join('');
 
   const hourCounts=g.hour_counts||Array(24).fill(0);
   const hMax=Math.max(...hourCounts,1);
-  const hourStrip=hourCounts.map((v,h)=>{
-    const a=(0.06+(v/hMax)*0.85).toFixed(3);
-    const tip=`${formatHour(h)} — ${fmt(v)} messages`;
-    return `<div class="hour-cell" style="background:rgba(94,234,212,${a})" data-tip="${esc(tip)}" onmouseenter="showTip(event,this.dataset.tip)" onmousemove="moveTip(event)" onmouseleave="hideTip()"></div>`;
-  }).join('');
+  const hourStrip=hourCounts.map((v,h)=>hourCellHtml(v,h,hMax)).join('');
   const hourLabels=['12 AM','','','3 AM','','','6 AM','','','9 AM','','','12 PM','','','3 PM','','','6 PM','','','9 PM','',''].map(l=>`<div style="text-align:center;font-family:var(--font-mono);font-size:7px;color:var(--muted)">${l}</div>`).join('');
 
   const words=g.top_words||[];
   const phrases=g.top_phrases||[];
   const wordCloud=words.length
     ? `<div class="word-cloud">`+words.slice(0,20).map(([w,c])=>`<div class="word-chip"><b>${esc(w)}</b><span class="n">${fmt(c)}</span></div>`).join('')+`</div>`
-    : '<div class="empty">Not enough text messages for word analysis.</div>';
+    : '<div class="empty">No eligible words found in this conversation.</div>';
   const phraseCloud=phrases.length
     ? `<div class="word-cloud">`+phrases.slice(0,15).map(([w,c])=>`<div class="word-chip"><b>${esc(w)}</b><span class="n">${fmt(c)}</span></div>`).join('')+`</div>`
-    : '<div class="empty">Not enough phrases to analyze.</div>';
+    : '<div class="empty">No eligible phrases found in this conversation.</div>';
 
   const emojis=g.top_emojis||[];
   const emojiCloud=emojis.length

@@ -7,13 +7,13 @@ no uploads, no external libraries.
 
 ## TL;DR
 
-1. **Download the project zip** and unzip it.
-2. **Grant Full Disk Access** to your terminal app (one-time), then restart it.
-3. **Run** `python3 build_dashboard.py` from the unzipped folder.
+1. **Clone this repo** to your Mac (one-time).
+2. **Grant Full Disk Access** to Terminal (one-time), then restart it.
+3. **Run** `python3 build_dashboard.py` in the project folder.
 4. **Open** `iMessage_Dashboard.html` in your browser.
 
-The three files the script actually needs are `build_dashboard.py`,
-`dashboard_template.html`, and `lookup_template.html` — all included in the zip.
+When there's an update, pull the latest code and run the script again — see
+[getting updates](#getting-updates).
 
 Need more detail? See the [full setup guide](#detailed-setup).
 
@@ -55,55 +55,83 @@ can be collapsed by clicking their headers.
 
 ## Detailed setup
 
-**1. Download and unzip the project.**
+### 1. Clone the repo (one-time)
 
-Grab the zip from the repo's releases or download page, then unzip it anywhere
-on your Mac (e.g. `~/Documents/iMessages-Wrapped`). The zip includes the README,
-a sample dashboard, and the three files the script depends on:
+**Terminal** is a built-in Mac app where you type commands. Open it with
+**Spotlight** (press `Cmd + Space`, type `Terminal`, press Enter).
+
+Copy and paste this command, then press Enter. It downloads the project into a
+folder called `messages-wrapped` inside your Documents:
+
+```bash
+cd ~/Documents && git clone https://github.com/serenawens/messages-wrapped.git
+```
+
+If macOS asks to install developer tools, click **Install** — that's normal the
+first time you use `git`.
+
+The script needs three files that all live in that folder:
 
 - `build_dashboard.py` — reads your Messages data and generates the dashboards
 - `dashboard_template.html` — main dashboard layout and logic
 - `lookup_template.html` — lookup page layout and logic
 
-All three must stay in the same folder. Don't move or rename them separately.
+Don't move or rename those separately.
 
-**2. Grant Full Disk Access (one-time).**
+### 2. Grant Full Disk Access (one-time)
 
-`chat.db` is a protected file on macOS, so your terminal needs permission:
+Your Messages database is a protected file, so Terminal needs permission to read
+it:
 
 1. Open **System Settings → Privacy & Security → Full Disk Access**
-2. Click **+** and add your terminal app (Terminal, iTerm2, etc.)
+2. Click **+** and add **Terminal**
 3. Toggle it on
-4. **Quit and reopen** the terminal app — the permission doesn't apply until you
-   restart it
+4. **Quit and reopen Terminal** — the permission doesn't apply until you restart
+   it
 
-**3. Run the script.**
+### 3. Run the script
 
-Open Terminal, `cd` into the unzipped folder, then:
+In Terminal, go into the project folder:
+
+```bash
+cd ~/Documents/messages-wrapped
+```
+
+Then run the build script:
 
 ```bash
 python3 build_dashboard.py
 ```
 
 This reads `~/Library/Messages/chat.db` automatically via a temporary copy, so
-your real database is never locked. If it can't find your database, point it at
-the file directly:
+your real database is never locked. The first run may take a minute depending on
+how many messages you have.
 
-```bash
-python3 build_dashboard.py /path/to/chat.db
-```
-
-**4. Open the output in your browser.**
+### 4. Open the output in your browser
 
 The script creates two files in the same folder:
 
 - `iMessage_Dashboard.html` — main dashboard
 - `iMessage_Dashboard_Lookup.html` — search any person or group chat
 
-Double-click either file, or right-click → **Open With** → Safari/Chrome. No
-internet connection required.
+Double-click either file in Finder, or right-click → **Open With** →
+Safari/Chrome. No internet connection is needed after the dashboard is built.
 
 To preview the UI without your data, open `iMessage_Dashboard_SAMPLE.html`.
+
+## Getting updates
+
+When the project is updated, you don't need to re-download anything. Just pull
+the latest code and rebuild your dashboard:
+
+```bash
+cd ~/Documents/messages-wrapped
+git pull
+python3 build_dashboard.py
+```
+
+Then reopen `iMessage_Dashboard.html` in your browser. Your `contacts.json`
+file (if you made one) stays in place — you only need to rerun the script.
 
 ## Extra: naming contacts (optional)
 

@@ -96,9 +96,9 @@
   .reply-value{font-family:var(--font-mono);font-size:22px;font-weight:600;}
   .reply-value.teal{color:var(--teal);}
   .reply-value.amber{color:var(--amber);}
-  .reply-distro{margin-top:14px;text-align:left;}
-  .reply-distro-bar{display:flex;height:24px;border-radius:6px;overflow:hidden;background:var(--panel);border:1px solid var(--border);}
-  .reply-distro-seg{height:100%;min-width:3px;}
+  .reply-distro-bar{display:flex;height:24px;border-radius:6px;overflow:visible;background:var(--panel);border:1px solid var(--border);align-items:stretch;}
+  .reply-distro-seg{height:100%;min-width:3px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform .15s ease;border-radius:2px;transform-origin:center;position:relative;z-index:0;}
+  .reply-distro-seg:hover{transform:scale(1.12);z-index:1;}
   .reply-distro-legend{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;margin-top:12px;}
   .reply-distro-item{display:flex;align-items:center;gap:7px;font-family:var(--font-mono);font-size:10.5px;color:var(--text);}
   .reply-distro-swatch{width:10px;height:10px;border-radius:2px;flex-shrink:0;}
@@ -106,13 +106,20 @@
   .reply-distro-pct{color:var(--muted);}
   .reply-summary{margin-top:14px;text-align:left;}
   .reply-summary-label{font-family:var(--font-mono);font-size:12px;font-weight:600;color:var(--text);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;}
-  .reply-summary-bar{display:flex;height:28px;border-radius:6px;overflow:hidden;border:1px solid var(--border);}
-  .reply-summary-seg{height:100%;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:10px;font-weight:600;color:var(--ink);min-width:28px;}
+  .reply-summary-bar{display:flex;height:28px;border-radius:6px;overflow:visible;border:1px solid var(--border);align-items:stretch;}
+  .reply-summary-seg{height:100%;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:10px;font-weight:600;color:var(--ink);min-width:28px;cursor:pointer;transition:transform .15s ease;border-radius:3px;transform-origin:center;position:relative;z-index:0;}
+  .reply-summary-seg:hover{transform:scale(1.12);z-index:1;}
+  .reply-seg-label{font-family:var(--font-mono);font-size:9px;font-weight:600;color:var(--ink);opacity:0;transition:opacity .15s ease;pointer-events:none;}
+  .reply-distro-seg:hover .reply-seg-label,.reply-summary-seg:hover .reply-seg-label{opacity:1;}
   .reply-detail-section{margin-top:16px;text-align:left;}
-  .reply-detail-title{font-family:var(--font-mono);font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em;}
+  .reply-detail-title{font-family:var(--font-mono);font-size:12px;font-weight:600;color:var(--text);margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em;}
+  .reply-detail-blurb{font-size:12px;line-height:1.4;color:var(--muted);margin-bottom:8px;}
 
-  .hour-strip{display:grid;grid-template-columns:repeat(24,1fr);gap:2px;padding:14px;}
-  .hour-cell{aspect-ratio:1;border-radius:2px;background:var(--panel-2);}
+  .hour-strip{display:grid;grid-template-columns:repeat(24,1fr);gap:2px;padding:14px;align-items:flex-end;}
+  .hour-cell{aspect-ratio:1;border-radius:2px;background:var(--panel-2);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform .15s ease;transform-origin:center;position:relative;z-index:0;}
+  .hour-cell:hover{transform:scale(1.18);z-index:1;}
+  .hour-cell-val{font-family:var(--font-mono);font-size:8px;font-weight:600;color:var(--text);opacity:0;transition:opacity .15s ease;pointer-events:none;line-height:1;}
+  .hour-cell:hover .hour-cell-val{opacity:1;}
 
   .gp-stat{padding:16px;font-size:14px;color:var(--text);}
   .gp-num{font-family:var(--font-mono);font-size:20px;font-weight:600;color:var(--teal);margin-right:6px;}
@@ -576,15 +583,26 @@ const REPLY_OVER_KEYS=['15–30m','30m–1h','1–6h','6–24h','Over 1 day'];
 const REPLY_LONG_KEYS=['1–3 days','3 days – 1 week','1–2 weeks','Over 2 weeks'];
 const REPLY_COLORS_TEAL=['#5EEAD4','#3DD4BE','#2BBDA8','#22A894','#1A9280','#147A6A','#0E6456'];
 const REPLY_COLORS_AMBER=['#F2A65A','#E89448','#DE8236','#D47028','#CA5E1C','#C04C12','#B63A08'];
-function replyDetailSection(title, buckets, keys, colors, offset){
+function replyBarSeg(pct, color, cls, aria){
+  const label=cls==='reply-summary-seg'
+    ? `${pct}%`
+    : `<span class="reply-seg-label">${pct}%</span>`;
+  return `<div class="${cls}" style="width:${pct}%;background:${color};" aria-label="${esc(aria||'')}">${label}</div>`;
+}
+function replyDetailSection(title, blurb, buckets, keys, colors, offset, context){
   const entries=keys.map((k,i)=>[k,buckets[k]||0,i]).filter(([,v])=>v>0);
   if(!entries.length) return '';
-  const bar=entries.map(([k,v,i])=>`<div class="reply-distro-seg" style="width:${v}%;background:${colors[offset+i]}" title="${k}: ${v}%"></div>`).join('');
+  const bar=entries.map(([k,v,i])=>replyBarSeg(v, colors[offset+i], 'reply-distro-seg', `${k} — ${v}% ${context}`)).join('');
   const legend=keys.map((k,i)=>{
     const v=buckets[k]||0; if(!v) return '';
     return `<div class="reply-distro-item"><div class="reply-distro-swatch" style="background:${colors[offset+i]}"></div><span class="reply-distro-label">${k}</span><span class="reply-distro-pct">${v}%</span></div>`;
   }).join('');
-  return `<div class="reply-detail-section"><div class="reply-detail-title">${title}</div><div class="reply-distro-bar">${bar}</div><div class="reply-distro-legend">${legend}</div></div>`;
+  return `<div class="reply-detail-section">
+    <div class="reply-detail-title">${title}</div>
+    ${blurb?`<div class="reply-detail-blurb">${blurb}</div>`:''}
+    <div class="reply-distro-bar">${bar}</div>
+    <div class="reply-distro-legend">${legend}</div>
+  </div>`;
 }
 function replyDistributionHtml(pcts, palette){
   if(!pcts||!Object.keys(pcts).length) return '<div class="empty">Not enough reply data.</div>';
@@ -595,8 +613,8 @@ function replyDistributionHtml(pcts, palette){
     const summary=`<div class="reply-summary">
       <div class="reply-summary-label">Quick vs slow replies</div>
       <div class="reply-summary-bar">
-        ${under?`<div class="reply-summary-seg" style="width:${under}%;background:${quickColor}">${under}%</div>`:''}
-        ${over?`<div class="reply-summary-seg" style="width:${over}%;background:${slowColor}">${over}%</div>`:''}
+        ${under?replyBarSeg(under, quickColor, 'reply-summary-seg', `Under 15 min — ${under}% of all replies`):''}
+        ${over?replyBarSeg(over, slowColor, 'reply-summary-seg', `Over 15 min — ${over}% of all replies`):''}
       </div>
       <div class="reply-distro-legend" style="margin-top:8px;">
         <div class="reply-distro-item"><div class="reply-distro-swatch" style="background:${quickColor}"></div><span class="reply-distro-label">Under 15 min</span><span class="reply-distro-pct">${under}%</span></div>
@@ -604,10 +622,10 @@ function replyDistributionHtml(pcts, palette){
       </div>
     </div>`;
     let html=summary
-      +replyDetailSection('Under 15 min · % of quick replies', pcts.under||{}, REPLY_UNDER_KEYS, colors, 0)
-      +replyDetailSection('Over 15 min · % of slow replies', pcts.over||{}, REPLY_OVER_KEYS, colors, 2);
+      +replyDetailSection('Under 15 min','Of those quick replies, how fast were they?', pcts.under||{}, REPLY_UNDER_KEYS, colors, 0, 'of quick replies')
+      +replyDetailSection('Over 15 min','Of the slower replies, how long did they take?', pcts.over||{}, REPLY_OVER_KEYS, colors, 2, 'of slow replies');
     if(pcts.over_long){
-      html+=replyDetailSection('Over 1 day · % of multi-day replies', pcts.over_long, REPLY_LONG_KEYS, colors, 4);
+      html+=replyDetailSection('Over 1 day','Of replies that took more than a day, how long?', pcts.over_long, REPLY_LONG_KEYS, colors, 4, 'of multi-day replies');
     }
     return html;
   }
@@ -647,9 +665,8 @@ function hourlyStripHtml(hourCounts){
   let cells = '';
   for(let h=0;h<24;h++){
     const alpha = hourCounts[h]/max;
-    const tip = `${formatHourLabel(h)} — ${fmt(hourCounts[h])} message${hourCounts[h]===1?'':'s'}`;
-    cells += `<div class="hour-cell" style="background:rgba(94,234,212,${(0.06+alpha*0.85).toFixed(3)})"
-      data-tip="${esc(tip)}" onmouseenter="showTip(event,this.dataset.tip)" onmousemove="moveTip(event)" onmouseleave="hideTip()"></div>`;
+    const bg = `rgba(94,234,212,${(0.06+alpha*0.85).toFixed(3)})`;
+    cells += `<div class="hour-cell" style="background:${bg}" aria-label="${formatHourLabel(h)} — ${fmt(hourCounts[h])} message${hourCounts[h]===1?'':'s'}"><span class="hour-cell-val">${fmt(hourCounts[h])}</span></div>`;
   }
   const labels = ['12 AM','','','3 AM','','','6 AM','','','9 AM','','','12 PM','','','3 PM','','','6 PM','','','9 PM','',''];
   const labelRow = labels.map(l=>`<div style="text-align:center;font-family:var(--font-mono);font-size:7px;color:var(--muted)">${l}</div>`).join('');
@@ -680,7 +697,7 @@ function renderPersonProfile(p){
   // Word cloud
   const wordCloud = p.topWords.length
     ? `<div class="word-cloud">`+p.topWords.slice(0,20).map(([w,c])=>`<div class="word-chip"><b>${esc(w)}</b><span class="n">${fmt(c)}</span></div>`).join('')+`</div>`
-    : '<div class="empty">Not enough text messages to show words.</div>';
+    : '<div class="empty">No eligible words found in this conversation.</div>';
 
   // Emojis
   const emojiRow = (items)=> items.length
@@ -1013,7 +1030,13 @@ function vocabularyHtml(){
 
   let body;
   if(items.length===0){
-    body='<div class="empty">No repeated text found for this filter.</div>';
+    if(isMessages){
+      body='<div class="empty">No repeated text found for this filter.</div>';
+    } else if(state.vocabGram==='bigrams'){
+      body='<div class="empty">No eligible phrases found in this conversation.</div>';
+    } else {
+      body='<div class="empty">No eligible words found in this conversation.</div>';
+    }
   } else if(isMessages){
     const max=items[0][1];
     body=items.slice(0,25).map((pair,i)=>rankRowHtml(i+1,pair[0],pair[1],max)).join('');

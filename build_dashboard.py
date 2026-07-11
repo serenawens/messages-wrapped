@@ -49,6 +49,18 @@ too very s t can will just don now ok okay lol yeah yea ya haha lmao omg
 gonna wanna gotta kinda sorta u r ur thats whats hes shes theres
 """.split())
 
+# Subset used only to reject phrases where every token is a function/filler word.
+PHRASE_STOPWORDS = set("""
+the a an and or but to of in on for with at by from as
+i you he she we they me him her us them my your his its our their
+is are was were be been being am have has had
+this that these those
+just like very so
+lol yeah yea ya haha lmao omg
+gonna wanna gotta kinda sorta
+ok okay
+""".split())
+
 TAPBACK_PREFIXES = ("Loved ", "Liked ", "Disliked ", "Laughed at ", "Emphasized ", "Questioned ")
 
 # Emoji detection — broad Unicode ranges covering all major emoji blocks
@@ -278,6 +290,22 @@ _URL_FRAGMENTS = frozenset({
     "html", "php", "asp", "tik", "watch", "share", "link",
 })
 
+_PUNCT_NORMALIZE = str.maketrans({
+    "\u2019": "'",  # '
+    "\u2018": "'",  # '
+    "\u02bc": "'",  # ʼ
+    "\u201c": '"',  # "
+    "\u201d": '"',  # "
+})
+
+# Unicode letters with optional internal apostrophe (contractions).
+_TOKEN_RE = re.compile(r"[^\W\d_]+(?:'[^\W\d_]+)?", re.UNICODE)
+
+
+def normalize_text_punctuation(text):
+    """Convert typographic punctuation to ASCII before tokenization."""
+    return (text or "").translate(_PUNCT_NORMALIZE)
+
 
 def strip_urls(text):
     return _URL_RE.sub(" ", text or "")
@@ -287,10 +315,10 @@ def is_vocab_item(text):
     """Filter URL-heavy tokens/phrases/messages from vocabulary output."""
     if not text or not str(text).strip():
         return False
-    lower = str(text).lower().strip()
+    lower = normalize_text_punctuation(str(text)).lower().strip()
     if _URL_RE.search(lower):
         return False
-    tokens = re.findall(r"[a-z0-9']+", lower)
+    tokens = _TOKEN_RE.findall(lower)
     if not tokens:
         return False
     urlish = sum(1 for t in tokens if t in _URL_FRAGMENTS)
@@ -300,11 +328,14 @@ def is_vocab_item(text):
 
 
 def tokenize_raw(text):
+    text = normalize_text_punctuation(text)
     text = strip_urls(text)
-    words = re.findall(r"[a-zA-Z]+(?:'[a-zA-Z]+)?", text.lower())
+    words = _TOKEN_RE.findall(text.lower())
     return [
         w for w in words
-        if 2 <= len(w) <= 20 and w not in _URL_FRAGMENTS
+        if 1 <= len(w) <= 20
+        and w not in _URL_FRAGMENTS
+        and not w.isdigit()
     ]
 
 
@@ -329,19 +360,18 @@ def is_countable_full_message(text):
 
 
 def unigrams_from_raw(raw_words):
-    return [w for w in raw_words if w not in STOPWORDS]
+    return [w for w in raw_words if len(w) >= 2 and w not in STOPWORDS]
 
 
 def phrases_from_raw(raw_words, nmin=2, nmax=5):
-    """Common phrases of length nmin..nmax words. Phrases must start and end on
-    a non-stopword (cleaner, more meaningful phrases) and contain at least one
-    non-stopword overall."""
+    """Common phrases of length nmin..nmax words. Reject only when every token
+    is a phrase stop word (function/filler words)."""
     grams = []
     n = len(raw_words)
     for size in range(nmin, nmax + 1):
         for i in range(n - size + 1):
             window = raw_words[i:i + size]
-            if window[0] in STOPWORDS or window[-1] in STOPWORDS:
+            if all(w in PHRASE_STOPWORDS for w in window):
                 continue
             grams.append(" ".join(window))
     return grams
@@ -623,6 +653,8 @@ def main():
     person_hour_counts: dict = defaultdict(lambda: [0] * 24)
     person_word_sent: dict = defaultdict(Counter)
     person_word_received: dict = defaultdict(Counter)
+    person_phrase_sent: dict = defaultdict(Counter)
+    person_phrase_received: dict = defaultdict(Counter)
     person_emoji_sent: dict = defaultdict(Counter)
     person_emoji_received: dict = defaultdict(Counter)
     person_gp_types: dict = defaultdict(Counter)
@@ -641,12 +673,6 @@ def main():
     chat_sender_monthly: dict = defaultdict(lambda: defaultdict(Counter))  # chat_id -> pid -> month -> n
     chat_daily: dict = defaultdict(Counter)             # chat_id -> "YYYY-MM-DD" -> count
     chat_sender_daily: dict = defaultdict(lambda: defaultdict(Counter))    # chat_id -> pid -> day -> n
-
-    # Map person_id -> their 1:1 chat_id (filled below during message loop)
-    person_to_1on1: dict = {}
-    for cid, chat in chats.items():
-        if not chat["group"] and len(chat["participants"]) == 1:
-            person_to_1on1[chat["participants"][0]] = cid
 
     seen_pairs = set()
     for r in msg_rows:
@@ -687,13 +713,20 @@ def main():
             chat_sender_daily[chat_id][sender][day_key_str] += 1
 
         # Per-person 1:1 tracking (for response times, word freq, emojis, lengths)
+        # Count ALL 1:1 messages here (including reactions / empty bodies) so
+        # monthly/daily totals match Top 10 and person-profile hero stats.
         is_group_chat = chats[chat_id]["group"]
         other_in_1on1 = None
         if not is_group_chat and len(chats[chat_id]["participants"]) == 1:
             other_in_1on1 = chats[chat_id]["participants"][0]
             person_1on1_ts[other_in_1on1].append((ts, is_from_me))
-            # "When They Text": only messages this person sent to you 1:1
-            if not is_from_me:
+            if is_from_me:
+                person_monthly_sent[other_in_1on1][month_key] += 1
+                person_daily_sent[other_in_1on1][day_key_str] += 1
+            else:
+                person_monthly_received[other_in_1on1][month_key] += 1
+                person_daily_received[other_in_1on1][day_key_str] += 1
+                # "When They Text": only messages this person sent to you 1:1
                 person_hour_counts[other_in_1on1][msg_dt.hour] += 1
 
         # Game Pigeon tracking
@@ -714,7 +747,7 @@ def main():
         if not text or text.startswith(TAPBACK_PREFIXES):
             continue
 
-        clean_text = re.sub(r"\s+", " ", text).strip()
+        clean_text = normalize_text_punctuation(re.sub(r"\s+", " ", text).strip())
         if not clean_text:
             continue
 
@@ -770,14 +803,13 @@ def main():
                 emoji_sent_ctr.update(found_emojis)
                 emoji_by_year_sent[year].update(found_emojis)
                 chat_emoji[chat_id].update(found_emojis)
-            # Per-person 1:1 stats
+            # Per-person 1:1 text stats (words/emoji/length only — volume is counted above)
             if other_in_1on1:
                 person_word_sent[other_in_1on1].update(uni)
+                person_phrase_sent[other_in_1on1].update(bi)
                 person_emoji_sent[other_in_1on1].update(found_emojis)
                 if not is_game_pigeon:
                     person_chars_sent[other_in_1on1].append(len(clean_text))
-                person_monthly_sent[other_in_1on1][month_key] += 1
-                person_daily_sent[other_in_1on1][day_key_str] += 1
         else:
             uni_received.update(uni)
             bi_received.update(bi)
@@ -790,14 +822,13 @@ def main():
                 emoji_received_ctr.update(found_emojis)
                 emoji_by_year_received[year].update(found_emojis)
                 chat_emoji[chat_id].update(found_emojis)
-            # Per-person 1:1 stats
+            # Per-person 1:1 text stats (words/emoji/length only — volume is counted above)
             if other_in_1on1:
                 person_word_received[other_in_1on1].update(uni)
+                person_phrase_received[other_in_1on1].update(bi)
                 person_emoji_received[other_in_1on1].update(found_emojis)
                 if not is_game_pigeon:
                     person_chars_received[other_in_1on1].append(len(clean_text))
-                person_monthly_received[other_in_1on1][month_key] += 1
-                person_daily_received[other_in_1on1][day_key_str] += 1
         chat_uni[chat_id].update(uni)
         chat_bi[chat_id].update(bi)
 
@@ -929,11 +960,7 @@ def main():
         )[:5]
 
         combined_words = person_word_sent[pid] + person_word_received[pid]
-        combined_phrases = defaultdict(int)  # bigrams tracked via chat_bi per chat - reuse if 1:1 exists
-        one_on_one_cid = person_to_1on1.get(pid)
-        if one_on_one_cid:
-            for bg, cnt in chat_bi.get(one_on_one_cid, {}).items():
-                combined_phrases[bg] += cnt
+        combined_phrases = person_phrase_sent[pid] + person_phrase_received[pid]
 
         person_profiles[pid] = {
             "sent": sent_1on1,
@@ -948,7 +975,7 @@ def main():
             "game_pigeon_types": [[k, v] for k, v in
                                   person_gp_types[pid].most_common(10)],
             "top_words": combined_words.most_common(20) if combined_words else [],
-            "top_phrases": sorted(combined_phrases.items(), key=lambda x: -x[1])[:10],
+            "top_phrases": combined_phrases.most_common(10) if combined_phrases else [],
             "emojis_sent": _top_emoji(person_emoji_sent.get(pid, Counter()), 15),
             "emojis_received": _top_emoji(person_emoji_received.get(pid, Counter()), 15),
             "avg_chars_sent": _avg(person_chars_sent.get(pid, [])),
